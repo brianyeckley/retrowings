@@ -1,0 +1,35 @@
+services:
+  web:
+    image: ghcr.io/brianyeckley/retrowings:latest
+    container_name: retrowings-web
+    ports:
+      # Optional: lets you play on your LAN at http://<server>:4100 without the tunnel.
+      - "${PORT:-4100}:8080"
+    restart: unless-stopped
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: retrowings-tunnel
+    command: tunnel --no-autoupdate run --url http://web:8080
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN:?TUNNEL_TOKEN must be set in .env}
+    depends_on:
+      - web
+    restart: unless-stopped
+
+  # Only needed if this server is NOT already running a Watchtower (for example
+  # the one in movie-night). Start it with: docker compose --profile watchtower up -d
+  watchtower:
+    profiles: ["watchtower"]
+    image: containrrr/watchtower:latest
+    container_name: retrowings-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Only needed if the ghcr.io image were private (docker login ghcr.io first).
+      - ${DOCKER_CONFIG_JSON:-~/.docker/config.json}:/config.json:ro
+    environment:
+      - DOCKER_API_VERSION=1.40
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+    command: retrowings-web
