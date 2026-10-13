@@ -22,10 +22,11 @@
 - Skydiving: drop at 1300 m, 4 freefall rings ~190 m apart vertically, canopy to bullseye.
 
 ## Change log
+- v4: sound. All synthesized with Web Audio (no files): three original tracks (title “Heartland Lesson”, flight “Blue Skies Takeoff” for biplane/jetpack, glide “Thermals” for glider/skydiving) with FM e-piano, bass, lead, pad, drums and SNES-style echo; biplane engine that follows throttle, jetpack roar on R2, speed-based wind, glider variometer beeps (faster/higher as you climb), stall horn, low-fuel beeps, chute opening, touchdown chirp, ring chimes, crash/splash, medal jingles, menu blips. Music and effects volume in the pause menu (saved per browser).
 - v3.1: nginx config warning fixed (duplicate gzip MIME type); README explains adding the tunnel's Public Hostname (which also creates the DNS record).
 - v3: controller picker ignores keyboard dongles; repo, Docker image and Cloudflare Tunnel deployment.
 - v2: runway lengthened and touchdown marker moved mid-runway; skydive tracking faster and quicker to respond, rings spaced further apart vertically, aim cross added; jetpack turns with the left stick, can lean to ~80°, carves turns at speed; detailed rocket-belt model.
 - v1: first playable prototype with all four lessons.
 
 ## Ideas for next iterations
-- Sound (engine, wind, ring chime), wind for glider/skydive, more levels, replay camera, invert-look option, rumble/adaptive triggers (Godot can reach DualSense features the browser can't).
+- Wind for glider/skydive, more levels, replay camera, invert-look option, rumble/adaptive triggers (Godot can reach DualSense features the browser can't).

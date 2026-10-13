@@ -11,6 +11,8 @@ A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog 
 
 Scoring: 10 per ring, +5 for a perfect center pass, up to 50 for the landing, up to 20 time bonus. Gold, silver and bronze medals. Best scores are saved in each player's browser.
 
+All sound and music is synthesized in the browser, so there are no audio files. Music and effects volume live in the pause menu.
+
 Play in Chrome or Edge. Plug the controller in and press any button once the page loads. Keyboard works too (controls are listed on each lesson's briefing screen).
 
 ## Project layout
