@@ -6,4 +6,4 @@
 - Physics units are meters, seconds, radians; Y is up and forward is -Z. The HUD converts to feet and mph.
 - Course data (rings, thermals, landings) lives in `COURSES`; ring heights are above the ground under the ring.
 - Keep `docs/design-notes.md` in sync with decisions and add a line to its change log for each version.
-- Deployment: GitHub Actions → `ghcr.io/brianyeckley/retrowings:latest` → nginx container on 8080 → Cloudflare Tunnel at retrowings.example.com.
+- Deployment: GitHub Actions → `ghcr.io/brianyeckley/retrowings:latest` → nginx container on 8080 → Cloudflare Tunnel. Don't write the public hostname into the repo (it's public).

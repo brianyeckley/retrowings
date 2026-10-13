@@ -58,9 +58,9 @@ docker compose up -d
 
 **Image visibility.** The repo is public. GHCR can still create a new package as private, so if the server's `docker compose pull` says *denied*, set it public once: GitHub → your profile → Packages → retrowings → Package settings → Change visibility → Public. After that no login is needed, and a Watchtower already running on the server (like movie-night's) updates this container automatically. On a server with no Watchtower, start this project's own with `docker compose --profile watchtower up -d`.
 
-**Tunnel routing** for `retrowings.example.com`:
-- *Tunnel created in the dashboard (you were given a token)*: the tunnel connecting is not enough. In the Cloudflare dashboard → Networking → Tunnels → your tunnel → **Routes → Add route** (called *Public Hostname* in the older Zero Trust UI), add a published application: subdomain `retrowings`, domain `example.com`, service `http://web:8080`. Saving it also creates the DNS record; without it the browser shows `DNS_PROBE_FINISHED_NXDOMAIN`.
-- *Locally-managed tunnel (cloudflared CLI with credentials file)*: `docker-compose.yml` already passes `--url http://web:8080`; create the DNS route with `cloudflared tunnel route dns <tunnel> retrowings.example.com`.
+**Tunnel routing** for your hostname (e.g. `retrowings.example.com`):
+- *Tunnel created in the dashboard (you were given a token)*: the tunnel connecting is not enough. In the Cloudflare dashboard → Networking → Tunnels → your tunnel → **Routes → Add route** (called *Public Hostname* in the older Zero Trust UI), add a published application with your subdomain and domain, service `http://web:8080`. Saving it also creates the DNS record; without it the browser shows `DNS_PROBE_FINISHED_NXDOMAIN`.
+- *Locally-managed tunnel (cloudflared CLI with credentials file)*: `docker-compose.yml` already passes `--url http://web:8080`; create the DNS route with `cloudflared tunnel route dns <tunnel> <your-hostname>`.
 - *Reusing the movie-night tunnel instead*: skip the `tunnel` service here and add the public hostname to that tunnel, pointing at `http://<server-lan-ip>:4100` (the host port from `.env`).
 
-Health check: `https://retrowings.example.com/healthz` returns `ok`.
+Health check: `https://<your-hostname>/healthz` returns `ok`.
