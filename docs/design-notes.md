@@ -22,6 +22,7 @@
 - Skydiving: drop at 1300 m, 4 freefall rings ~190 m apart vertically, canopy to bullseye.
 
 ## Change log
+- v3.1: nginx config warning fixed (duplicate gzip MIME type); README explains adding the tunnel's Public Hostname (which also creates the DNS record).
 - v3: controller picker ignores keyboard dongles; repo, Docker image and Cloudflare Tunnel deployment.
 - v2: runway lengthened and touchdown marker moved mid-runway; skydive tracking faster and quicker to respond, rings spaced further apart vertically, aim cross added; jetpack turns with the left stick, can lean to ~80°, carves turns at speed; detailed rocket-belt model.
 - v1: first playable prototype with all four lessons.

@@ -57,8 +57,8 @@ docker compose up -d
 **Image visibility.** The repo is public. GHCR can still create a new package as private, so if the server's `docker compose pull` says *denied*, set it public once: GitHub → your profile → Packages → retrowings → Package settings → Change visibility → Public. After that no login is needed, and a Watchtower already running on the server (like movie-night's) updates this container automatically. On a server with no Watchtower, start this project's own with `docker compose --profile watchtower up -d`.
 
 **Tunnel routing** for `retrowings.example.com`:
-- *Token / CLI-managed tunnel*: `docker-compose.yml` already passes `--url http://web:8080`.
-- *Dashboard-managed tunnel*: in Cloudflare Zero Trust → Networks → Tunnels → your tunnel → Public Hostname, add `retrowings.example.com` → HTTP → `web:8080`.
+- *Tunnel created in the dashboard (you were given a token)*: the tunnel connecting is not enough. In Cloudflare Zero Trust → Networks → Tunnels → your tunnel → **Public Hostname**, add subdomain `retrowings`, domain `example.com`, service **HTTP** `web:8080`. Saving it also creates the DNS record; without it the browser shows `DNS_PROBE_FINISHED_NXDOMAIN`.
+- *Locally-managed tunnel (cloudflared CLI with credentials file)*: `docker-compose.yml` already passes `--url http://web:8080`; create the DNS route with `cloudflared tunnel route dns <tunnel> retrowings.example.com`.
 - *Reusing the movie-night tunnel instead*: skip the `tunnel` service here and add the public hostname to that tunnel, pointing at `http://<server-lan-ip>:4100` (the host port from `.env`).
 
 Health check: `https://retrowings.example.com/healthz` returns `ok`.
