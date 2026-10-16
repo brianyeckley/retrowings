@@ -2573,8 +2573,10 @@ const cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), yaw: 0, pitch
 function updateCamera(dt) {
   const p = tv(sim.pos), fwd = tv(sim.q.rot(F0));
   let head = new THREE.Vector3(fwd.x, 0, fwd.z);
-  if (mode === 'jetpack' || mode === 'skydive' || head.lengthSq() < 0.01) head = tv(fwdOfYaw(sim.psi));
+  if (sim.psi !== undefined && (mode === 'jetpack' || mode === 'skydive' || head.lengthSq() < 0.01)) head = tv(fwdOfYaw(sim.psi));
+  else if (head.lengthSq() < 0.01) head = cam.head ? cam.head.clone() : new THREE.Vector3(0, 0, -1);   // nose straight up/down: keep the last heading
   head.normalize();
+  cam.head = head.clone();
   let dir = head, dist = 10, height = 3, look = p.clone();
   if (mode === 'plane') { dir = fwd.clone().lerp(head, 0.45).normalize(); dist = 15; height = 4.5; look.add(fwd.clone().multiplyScalar(10)); }
   else if (mode === 'glider') { dir = fwd.clone().lerp(head, 0.5).normalize(); dist = 11; height = 2.6; look.add(fwd.clone().multiplyScalar(6)); }
