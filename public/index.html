@@ -398,7 +398,7 @@ function ringCross(p0, p1, ring) {
 }
 
 // ---------- vehicles ----------
-const PLANE = { GEAR: 1.7, THRUST: 8.0, DRAG: 0.00264, VLIFT: 32 };
+const PLANE = { GEAR: 1.95, THRUST: 8.0, DRAG: 0.00264, VLIFT: 32 };
 class PlaneSim {
   constructor(W) { this.W = W; }
   reset(sp) {
@@ -843,21 +843,160 @@ function buildProps() {
 }
 
 // ---------- vehicle models (built from boxes, forward is -Z) ----------
-function makeBiplane(body = '#d8362b', wing = '#f2c53d') {
+// Biplane: faceted fuselage, radial engine, ribbed wings with moving ailerons, elevator and rudder,
+// N-struts with bracing wires, spoked wheels, and a pilot in a leather helmet and scarf. Forward is -Z.
+function makeBiplane(body = '#d8362b', wing = '#f2c53d', trim = '#f6f1e4') {
   const g = new THREE.Group();
-  box(1.1, 1.1, 6, body, 0, 0, 0, g);
-  box(1.25, 1.25, 0.8, '#3a3f4f', 0, 0, -3.2, g);
-  const prop = box(0.18, 3.2, 0.12, '#5a4632', 0, 0, -3.7, g);
-  box(9, 0.16, 1.5, wing, 0, -0.5, -0.8, g);
-  box(10, 0.16, 1.6, wing, 0, 1.35, -1.0, g);
-  for (const sx of [-3.3, 3.3]) for (const sz of [-1.4, -0.3]) box(0.12, 1.85, 0.12, '#3a3f4f', sx, 0.42, sz, g);
-  box(3.4, 0.14, 1.0, wing, 0, 0.2, 2.7, g);
-  box(0.14, 1.4, 1.1, body, 0, 0.95, 2.8, g);
-  for (const sx of [-0.95, 0.95]) { box(0.3, 0.8, 0.8, '#262a35', sx, -1.3, -1.4, g); box(0.1, 0.9, 0.1, '#3a3f4f', sx * 0.7, -0.8, -1.4, g); }
-  box(0.5, 0.5, 0.5, '#f0b98a', 0, 0.8, 0.3, g);
-  box(0.56, 0.2, 0.56, '#6b4a2b', 0, 1.05, 0.3, g);
-  g.userData.prop = prop;
+  const darker = c => { const k = col(c); k.multiplyScalar(0.78); return '#' + k.getHexString(); };
+  const wingDark = darker(wing), bodyDark = darker(body);
+  const tube = (parent, z0, z1, r0, r1, c, y = 0, seg = 8) => {   // tapered section along Z
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, Math.abs(z1 - z0), seg), mat(c));
+    m.geometry.rotateX(Math.PI / 2); m.rotation.z = Math.PI / seg; m.position.set(0, y, (z0 + z1) / 2); parent.add(m); return m;
+  };
+  // fuselage stations, nose to tail
+  tube(g, -2.35, -1.1, 0.6, 0.62, body);
+  tube(g, -1.1, 0.4, 0.62, 0.55, body);
+  tube(g, 0.4, 1.9, 0.55, 0.34, body);
+  tube(g, 1.9, 3.05, 0.34, 0.12, body);
+  tube(g, -2.3, -2.0, 0.63, 0.63, trim);                    // band behind the cowling
+  tube(g, 2.2, 2.45, 0.3, 0.26, wing);                      // tail band
+  // roundels on the fuselage sides
+  for (const s of [-1, 1]) {
+    const ring = new THREE.Mesh(new THREE.CircleGeometry(0.32, 12), mat(trim)); ring.position.set(s * 0.53, 0.02, 1.05); ring.rotation.y = s * Math.PI / 2 + s * 0.08; g.add(ring);
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.17, 12), mat('#3d7be0')); dot.position.set(s * 0.535, 0.02, 1.05); dot.rotation.y = ring.rotation.y; g.add(dot);
+  }
+  // radial engine: polished cowling ring, dark crankcase, cylinder heads, exhaust stubs, spinner
+  tube(g, -3.0, -2.35, 0.7, 0.66, '#cfd6e0', 0, 12);
+  const face = new THREE.Mesh(new THREE.CircleGeometry(0.62, 12), mat('#2a2f3c')); face.position.z = -2.99; face.rotation.y = Math.PI; g.add(face);
+  for (let i = 0; i < 7; i++) {
+    const a = i / 7 * Math.PI * 2, cyl = part(g, 0.16, 0.22, 0.32, '#5a6070', Math.cos(a) * 0.42, Math.sin(a) * 0.42, -2.9);
+    cyl.rotation.z = a - Math.PI / 2;
+  }
+  const exhausts = [];
+  for (const s of [-1, 1]) { rod(g, V3T(s * 0.6, -0.25, -2.3), V3T(s * 0.72, -0.42, -1.6), 0.05, '#3a3f4f'); exhausts.push(V3T(s * 0.74, -0.44, -1.55)); }
+  const spinner = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.45, 8), mat(trim));
+  spinner.rotation.x = -Math.PI / 2; spinner.position.z = -3.2; g.add(spinner);
+  // propeller: two shaped wooden blades, plus a blur disc shown at high revs
+  const prop = new THREE.Group(); prop.position.z = -3.12; g.add(prop);
+  for (const s of [-1, 1]) {
+    const blade = part(prop, 0.24, 1.35, 0.07, '#7a5232', 0, s * 0.77, 0); blade.rotation.y = s * 0.35;
+    part(prop, 0.17, 0.22, 0.08, '#f2c53d', 0, s * 1.36, 0).rotation.y = s * 0.35;   // painted tips
+  }
+  const blur = new THREE.Mesh(new THREE.CircleGeometry(1.5, 20), new THREE.MeshBasicMaterial({ color: '#d8cdb8', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+  blur.position.z = -3.14; g.add(blur);
+  // cockpit: dark opening, padded coaming, windscreen, headrest fairing
+  part(g, 0.62, 0.1, 0.95, '#1a1d26', 0, 0.5, 0.1);                     // open cockpit
+  for (const s of [-1, 1]) part(g, 0.1, 0.09, 1.05, '#6b4a2b', s * 0.33, 0.58, 0.1);   // padded leather rim
+  for (const z of [-0.39, 0.6]) part(g, 0.76, 0.09, 0.1, '#6b4a2b', 0, 0.58, z);
+  const ws = new THREE.Mesh(boxGeo(0.5, 0.26, 0.03), lambert('#bfe6ff', { transparent: true, opacity: 0.55 }));
+  ws.position.set(0, 0.72, -0.44); ws.rotation.x = -0.35; g.add(ws);
+  const rest = tube(g, 0.62, 1.7, 0.2, 0.06, body, 0.55, 6); rest.scale.set(1, 1.25, 1);
+  // pilot in a leather helmet, goggles and a long scarf
+  const rig = makePilot({ suit: '#7a5232', accent: '#5a3b26', belt: '#262a35', helmet: '#6b4a2b', glove: '#3a2a1e', boot: '#262a35', skin: '#f0b98a' });
+  rig.root.position.set(0, 0.08, 0.15); g.add(rig.root);
+  for (const s of [-1, 1]) { const k = s < 0 ? 'L' : 'R'; rot(rig.j['hip' + k], 1.45, 0, 0.05, s); rot(rig.j['kn' + k], -1.3, 0, 0, s); rot(rig.j['sh' + k], 0.7, 0, 0.12, s); rot(rig.j['el' + k], 0.9, 0, 0, s); }
+  const scarf = []; let parent = rig.j.neck;
+  for (let i = 0; i < 4; i++) {
+    const seg = joint(parent, 0, i ? 0 : 0.02, i ? 0.17 : 0.07);
+    part(seg, 0.1 - i * 0.012, 0.03, 0.18, i % 2 ? '#f6f1e4' : '#ffffff', 0, 0, 0.09);
+    scarf.push(seg); parent = seg;
+  }
+  // wings: main panel with rib caps, rounded tips, leading-edge strip; upper wing carries the ailerons
+  const ailerons = [];
+  const wingPanel = (span, chord, y, z, ail) => {
+    const w = new THREE.Group(); w.position.set(0, y, z); g.add(w);
+    const fixedChord = ail ? chord - 0.42 : chord;
+    part(w, span - chord, 0.14, fixedChord, wing, 0, 0, -(chord - fixedChord) / 2);
+    part(w, span - chord, 0.08, 0.12, wingDark, 0, 0.01, -chord / 2 + 0.06);
+    for (let x = -span / 2 + 0.9; x < span / 2 - 0.6; x += 0.75) part(w, 0.05, 0.155, fixedChord - 0.1, wingDark, x, 0, -(chord - fixedChord) / 2);
+    for (const s of [-1, 1]) {
+      const tip = new THREE.Mesh(new THREE.CylinderGeometry(chord / 2, chord / 2, 0.14, 10, 1, false, 0, Math.PI), mat(wing));
+      tip.position.set(s * (span - chord) / 2, 0, 0); tip.rotation.y = s > 0 ? 0 : Math.PI; w.add(tip);
+    }
+    if (ail) {
+      part(w, span - chord - 5.4, 0.1, 0.42, wingDark, 0, 0, chord / 2 - 0.21);   // fixed trailing edge between the ailerons
+      for (const s of [-1, 1]) {
+        const hinge = joint(w, s * ((span - chord) / 2 - 1.35), 0, chord / 2 - 0.42);
+        part(hinge, 2.7, 0.09, 0.42, wingDark, 0, 0, 0.21);
+        ailerons.push({ hinge, s });
+      }
+    } else part(w, span - chord, 0.1, 0.01, wingDark, 0, 0, chord / 2);
+    return w;
+  };
+  wingPanel(10.2, 1.6, 1.38, -1.0, true);
+  wingPanel(9.2, 1.5, -0.52, -0.8, false);
+  // cabane struts, N-struts, bracing wires
+  for (const s of [-1, 1]) {
+    rod(g, V3T(s * 0.32, 0.5, -1.55), V3T(s * 0.5, 1.32, -1.45), 0.045, '#3a3f4f');
+    rod(g, V3T(s * 0.32, 0.5, -0.65), V3T(s * 0.5, 1.32, -0.55), 0.045, '#3a3f4f');
+    const lo = -0.45, hi = 1.31, sx = s * 3.4;
+    rod(g, V3T(sx, lo, -1.35), V3T(sx, hi, -1.55), 0.055, '#3a3f4f');
+    rod(g, V3T(sx, lo, -0.35), V3T(sx, hi, -0.55), 0.055, '#3a3f4f');
+    rod(g, V3T(sx, lo, -0.35), V3T(sx, hi, -1.55), 0.04, '#3a3f4f');
+    rod(g, V3T(s * 0.5, -0.45, -0.9), V3T(sx, hi, -1.0), 0.012, '#c8ccd4');
+    rod(g, V3T(s * 0.5, 1.32, -1.0), V3T(sx, lo, -0.8), 0.012, '#c8ccd4');
+  }
+  // tail: stabilizer and fin with hinged elevator and rudder; rudder in stripes
+  part(g, 3.2, 0.1, 0.75, wing, 0, 0.12, 2.55);
+  for (const s of [-1, 1]) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.375, 0.375, 0.1, 8, 1, false, 0, Math.PI), mat(wing)); t.position.set(s * 1.6, 0.12, 2.55); t.rotation.y = s > 0 ? 0 : Math.PI; g.add(t); }
+  const elevator = joint(g, 0, 0.12, 2.93); part(elevator, 3.6, 0.08, 0.42, wingDark, 0, 0, 0.21);
+  const finShape = new THREE.Shape([new THREE.Vector2(2.2, 0.2), new THREE.Vector2(2.96, 0.2), new THREE.Vector2(2.96, 1.24), new THREE.Vector2(2.8, 1.3)]);
+  const finGeo = new THREE.ExtrudeGeometry(finShape, { depth: 0.1, bevelEnabled: false });
+  finGeo.rotateY(-Math.PI / 2); finGeo.translate(0.05, 0, 0);
+  g.add(new THREE.Mesh(finGeo, mat(body)));
+  const rudder = joint(g, 0, 0.64, 2.96);
+  part(rudder, 0.09, 1.25, 0.5, trim, 0, 0, 0.25);
+  for (const yy of [-0.35, 0.05, 0.45]) part(rudder, 0.1, 0.18, 0.51, '#3d7be0', 0, yy, 0.25);
+  part(g, 0.08, 0.35, 0.08, '#3a3f4f', 0, -0.3, 2.85).rotation.x = 0.5;     // tail skid
+  // landing gear: V-struts, axle fairing, spoked wheels
+  const wheels = [];
+  for (const s of [-1, 1]) {
+    rod(g, V3T(s * 0.35, -0.45, -1.95), V3T(s * 0.95, -1.35, -1.6), 0.05, '#3a3f4f');
+    rod(g, V3T(s * 0.35, -0.45, -0.95), V3T(s * 0.95, -1.35, -1.6), 0.05, '#3a3f4f');
+    const wheel = joint(g, s * 1.0, -1.35, -1.6); wheels.push(wheel);
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.16, 14), mat('#1f2229')); tire.rotation.z = Math.PI / 2; wheel.add(tire);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.18, 10), mat('#cfd6e0')); hub.rotation.z = Math.PI / 2; wheel.add(hub);
+    for (let i = 0; i < 3; i++) { const sp = part(wheel, 0.19, 0.42, 0.04, '#5a6070', 0, 0, 0); sp.rotation.x = i * Math.PI / 3; }
+  }
+  rod(g, V3T(-0.95, -1.35, -1.6), V3T(0.95, -1.35, -1.6), 0.04, '#3a3f4f');
+  g.userData = { prop, blur, ailerons, elevator, rudder, wheels, scarf, rig, exhausts, st: { ail: 0, elev: 0, rud: 0, wheel: 0, puff: 0 } };
   return g;
+}
+
+function animateBiplane(dt, t, ud, live) {
+  const st = ud.st, inp = live && state === 'play' ? Input.s : {};
+  const thr = live ? sim.throttle : 0.65, speed = live ? sim.vel.len() : 35;
+  // propeller: solid blades at low revs, a soft blur disc as they spin up
+  ud.prop.rotation.z = live ? sim.prop : ud.prop.rotation.z + 45 * dt;
+  const blurA = clamp((thr - 0.15) / 0.5, 0, 1);
+  ud.blur.material.opacity = 0.32 * blurA;
+  ud.prop.children.forEach(b => { b.visible = blurA < 0.85 || Math.random() < 0.35; });
+  // control surfaces follow the stick and rudder buttons
+  st.ail = damp(st.ail, inp.lx || 0, 10, dt); st.elev = damp(st.elev, inp.ly || 0, 10, dt); st.rud = damp(st.rud, (inp.l1 || 0) - (inp.r1 || 0), 10, dt);
+  for (const a of ud.ailerons) a.hinge.rotation.x = a.s * -st.ail * 0.6;
+  ud.elevator.rotation.x = -st.elev * 0.6;
+  ud.rudder.rotation.y = -st.rud * 0.6;
+  // wheels roll on the ground
+  if (live && sim.onGround) st.wheel -= speed / 0.35 * dt;
+  ud.wheels.forEach(w => { w.rotation.x = st.wheel; });
+  // pilot glances into turns; the scarf streams back and flutters with airspeed
+  const j = ud.rig.j;
+  rot(j.neck, -0.05 + st.elev * 0.15, -(st.ail * 0.5 + st.rud * 0.25) + (state === 'play' ? -Input.s.rx * 0.6 : 0), 0);
+  const f = clamp(speed / 40, 0, 1.2);
+  ud.scarf.forEach((seg, i) => {
+    const flap = Math.sin(t * (9 + speed * 0.3) - i * 1.3) * (0.15 + 0.25 * f);
+    seg.rotation.set((i ? 0.05 : 0.35 - 0.25 * f) + flap * 0.4, flap, 0);
+  });
+  // exhaust puffs that thicken with throttle
+  if (live && !sim.done && vehicle === vehicleModels.plane) {
+    st.puff += dt * (2 + thr * 14);
+    while (st.puff > 1) {
+      st.puff -= 1;
+      const p = ud.exhausts[Math.random() < 0.5 ? 0 : 1];
+      const w = vehicle.localToWorld(p.clone());
+      emit(w, 1, thr > 0.8 ? '#7d7d7d' : '#a8a8a8', 0.8, 0.7 + thr * 0.5, -0.6, 1, { x: sim.vel.x * 0.75, y: sim.vel.y * 0.75, z: sim.vel.z * 0.75 });
+    }
+  }
 }
 // ---------- pilots: a jointed rig shared by the glider, jetpack and skydiving lessons ----------
 // Joints are Groups; limbs hang down their joint's -Y. Root origin is at the hips, the pilot faces -Z.
@@ -1834,7 +1973,7 @@ function syncVehicle(dt) {
   vehicle.position.copy(tv(sim.pos));
   vehicle.quaternion.set(sim.q.x, sim.q.y, sim.q.z, sim.q.w);
   const ud = vehicle.userData;
-  if (mode === 'plane' && ud.prop) ud.prop.rotation.z = sim.prop;
+  if (mode === 'plane') animateBiplane(dt, animClock, ud, true);
   if (mode === 'jetpack') {
     for (const f of ud.flames) { const s = sim.thrust; f.visible = s > 0.02; f.scale.set(0.7 + s * 0.6, 0.3 + s * 1.7 * (0.85 + Math.random() * 0.3), 0.7 + s * 0.6); }
     ud.flameCore.forEach(f => { f.visible = sim.thrust > 0.02; f.scale.set(1, 0.3 + sim.thrust * 1.6 * (0.8 + Math.random() * 0.4), 1); });
@@ -2098,7 +2237,7 @@ function frame(now) {
   // drop plane flies on
   if (dropPlane && dropPlane.visible && state === 'play') {
     const f = fwdOfYaw(course.spawn.yaw);
-    dropPlane.position.x += f.x * 40 * dt; dropPlane.position.z += f.z * 40 * dt; dropPlane.userData.prop.rotation.z += 50 * dt;
+    dropPlane.position.x += f.x * 40 * dt; dropPlane.position.z += f.z * 40 * dt; animateBiplane(dt, animClock, dropPlane.userData, false);
   }
   // ring animation
   const tnow = now / 1000;
@@ -2137,7 +2276,7 @@ async function boot() {
   vehicleModels.plane = makeBiplane(); vehicleModels.glider = makeGlider(); vehicleModels.jetpack = makeJetpacker(); vehicleModels.skydive = makeSkydiver();
   vehicleModels.plane.scale.setScalar(1.15);
   for (const k in vehicleModels) scene.add(vehicleModels[k]);
-  dropPlane = makeBiplane('#3d7be0', '#f6f1e4'); dropPlane.scale.setScalar(1.6); dropPlane.visible = false; scene.add(dropPlane);
+  dropPlane = makeBiplane('#3d7be0', '#f6f1e4', '#e8463a'); dropPlane.scale.setScalar(1.6); dropPlane.visible = false; scene.add(dropPlane);
   shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.35, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
   try { await document.fonts.load('16px Silkscreen'); } catch (e) { /* fallback font */ }
