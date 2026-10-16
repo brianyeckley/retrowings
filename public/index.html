@@ -253,7 +253,7 @@ const COURSES = {
   skydive: {
     name: 'Skydiving', short: 'SKYDIVING', par: 110, ringR: 20,
     desc: 'Freefall through the rings, pull the chute, land on target.',
-    goal: 'Fall through the rings. Push the stick halfway forward to track (fastest forward travel), all the way to dive straight down, and pull back to spread flat and slow your fall. The white cross shows where you will pass the next ring. Pull the chute with ✕, then steer onto the bullseye.',
+    goal: 'Fall through the rings. Push the stick halfway forward to track (fastest forward travel), all the way to dive straight down, and pull back to spread flat and slow your fall. The white cross shows where you will pass the next ring. Pull the chute with ✕, then steer onto the bullseye. The marker on the ground shows where your glide will land you. Flare by pulling back just before touchdown.',
     spawn: { x: -400, z: 200, agl: 1300, speed: 35 },
     rings: [[-370, 150, 1120], [-330, 95, 930], [-310, 30, 740], [-265, -20, 560]],
     vertical: true,
@@ -561,11 +561,14 @@ class JetpackSim {
 }
 
 const DIVER_FEET = 1.02;
+// Canopy speeds in m/s: forward and sink rate for neutral, full dive and full brake; landing limits.
+const CANOPY = { glide: 18, sink: 5.5, diveFwd: 28, diveSink: 9.5, brakeFwd: 6, brakeSink: 8.5,
+  flareGain: 0.8, flareMax: 8, crashSink: 9, crashFwd: 21, hardSink: 5.5, hardFwd: 13.5 };
 class SkydiveSim {
   constructor(W) { this.W = W; }
   reset(sp) {
     this.pos = new V3(sp.x, sp.y, sp.z); this.psi = sp.yaw; this.alpha = 15 * DEG; this.bank = 0;
-    this.vel = fwdOfYaw(this.psi).mul(sp.speed || 35); this.phase = 'free'; this.open = 0; this.openT = 0; this.done = null;
+    this.vel = fwdOfYaw(this.psi).mul(sp.speed || 35); this.phase = 'free'; this.open = 0; this.openT = 0; this.done = null; this.flareLift = 0;
     this.q = Quat.ypr(this.psi, -(90 * DEG + this.alpha), 0);
   }
   get agl() { return this.pos.y - DIVER_FEET - this.W.surfaceAt(this.pos.x, this.pos.z); }
@@ -589,11 +592,16 @@ class SkydiveSim {
     } else {
       this.openT += dt; this.open = clamp(this.openT / 2.0, 0, 1);
       if (this.open >= 1) this.phase = 'canopy';
-      const tF = inp.ly < 0 ? lerp(11, 15, -inp.ly) : lerp(11, 4, inp.ly);
-      const tD = inp.ly < 0 ? lerp(7, 10, -inp.ly) : lerp(7, 3.6, inp.ly);
-      this.psi += -inp.lx * 0.95 * this.open * dt; this.bank = damp(this.bank, inp.lx * 25 * DEG * this.open, 3, dt);
-      s = damp(s, tD, 0.3 + 2.4 * this.open * this.open, dt);
-      const hr = 0.4 + 1.2 * this.open;
+      // Canopy: a brisk default glide. Stick forward dives (fast forward and down), stick back brakes
+      // (slow forward, but you sink faster). Slowing down quickly turns forward speed into lift: that's the flare.
+      const fwd = Math.max(0, -inp.ly), brk = Math.max(0, inp.ly);
+      const tF = lerp(lerp(CANOPY.glide, CANOPY.diveFwd, fwd), CANOPY.brakeFwd, brk);
+      const tD = lerp(lerp(CANOPY.sink, CANOPY.diveSink, fwd), CANOPY.brakeSink, brk * brk);
+      this.psi += -inp.lx * (0.75 + 0.012 * this.vel.lenH()) * this.open * dt; this.bank = damp(this.bank, inp.lx * (20 + fwd * 15) * DEG * this.open, 3, dt);
+      const hs = this.vel.lenH();
+      this.flareLift = this.phase === 'canopy' ? Math.min(CANOPY.flareMax, Math.max(0, hs - tF) * CANOPY.flareGain) : 0;
+      s = damp(s, Math.max(1, tD - this.flareLift), 0.3 + 2.4 * this.open * this.open, dt);
+      const hr = (0.4 + 1.2 * this.open) * (hs > tF ? 0.55 : 0.8);   // speed bleeds off gradually in a flare
       this.vel.x = damp(this.vel.x, ff.x * tF, hr, dt); this.vel.z = damp(this.vel.z, ff.z * tF, hr, dt);
       this.alpha = damp(this.alpha, -90 * DEG, 4, dt);
       this.q = Quat.ypr(this.psi, 0, -this.bank);
@@ -606,7 +614,8 @@ class SkydiveSim {
       if (this.W.isWater(this.pos.x, this.pos.z)) return this.crash('Splashed into the water');
       if (this.phase === 'free') return this.crash('Forgot to pull the chute!');
       const hs = this.vel.lenH();
-      if (s > 8.5 || hs > 13.5) return this.crash('Landed too hard');
+      if (s > CANOPY.crashSink) return this.crash(inp.ly > 0.5 ? 'Came down too hard. Release the brakes higher up' : 'Came down too hard. Flare before touchdown');
+      if (hs > CANOPY.crashFwd) return this.crash('Landed too fast. Flare before touchdown');
       this.done = { type: 'landed', x: this.pos.x, z: this.pos.z, vs: s, hs };
       this.vel.set(0, 0, 0);
       return;
@@ -636,7 +645,7 @@ function landingScore(course, done) {
   const zones = [2, 5, 9, 14, 20].map(v => v * s), vals = [50, 40, 30, 20, 10];
   let pts = 0; for (let i = 0; i < zones.length; i++) if (d <= zones[i]) { pts = vals[i]; break; }
   let note = pts > 0 ? `${Math.round(d * M_TO_FT)} ft from center` : `Missed the target by ${Math.round((d - L.r) * M_TO_FT)} ft`;
-  const hard = done.vs > (course.key === 'skydive' ? 5 : 2.6) || (course.key === 'glider' && done.hs > 11);
+  const hard = course.key === 'skydive' ? (done.vs > CANOPY.hardSink || done.hs > CANOPY.hardFwd) : (done.vs > 2.6 || (course.key === 'glider' && done.hs > 11));
   if (hard && pts > 0) { pts = Math.max(0, pts - 10); note += ', hard landing −10'; }
   return { pts, note };
 }
@@ -1296,7 +1305,7 @@ function animateSkydiver(dt, t) {
       rot(j['an' + k], -0.35, 0, 0, s);
     }
     const turn = Math.max(0, s * (inp.lx || 0));
-    const pull = clamp(turn + brake + flare, 0, 1);
+    const pull = clamp(turn + brake, 0, 1);   // hands follow the player's brakes and turns (the flare is the player's job)
     const target = V3T(s * 0.3, 1.02 - pull * 0.5, -0.04);
     if (landed) target.set(s * 0.3, 0.75, -0.25);
     vehicle.updateMatrixWorld(true);
@@ -1813,7 +1822,7 @@ const CONTROLS = {
   plane: [['Left stick', 'Pitch (forward = nose down) and bank'], ['L1 / R1', 'Rudder left / right'], ['✕ / □', 'Throttle up / down (hold)'], ['Right stick', 'Look around'], ['Options', 'Pause']],
   glider: [['Left stick', 'Pitch (forward = dive, faster) and bank to turn'], ['✕', 'Flare: slow down, use it to land'], ['Right stick', 'Look around'], ['Options', 'Pause']],
   jetpack: [['R2', 'Thrust, pressure-sensitive. About half pull hovers'], ['Left stick ↑ / ↓', 'Lean forward / back. Push all the way to point the jets behind you and fly flat out'], ['Left stick ← / →', 'Turn'], ['Right stick', 'Look around'], ['Options', 'Pause']],
-  skydive: [['Left stick ↑ / ↓', 'Dive head-down (fast) / spread flat (slow)'], ['Left stick ← / →', 'Turn'], ['✕', 'Pull the parachute'], ['Under canopy', 'Stick forward = faster, back = brake, sideways = steer'], ['Right stick', 'Look around']],
+  skydive: [['Left stick ↑ / ↓', 'Dive head-down (fast) / spread flat (slow)'], ['Left stick ← / →', 'Turn'], ['✕', 'Pull the parachute'], ['Under canopy', 'Forward = dive (fast, steep), back = brake (slow, but you sink faster), sideways = steer. Pull back just before touchdown to flare'], ['Right stick', 'Look around']],
 };
 const KEYS = {
   plane: 'Keyboard: W/S pitch · A/D bank · Q/E rudder · Space/C throttle · arrows look · Esc pause',
@@ -2114,7 +2123,8 @@ function drawHUD(dt) {
     txt(sim.phase === 'free' ? 'FREEFALL' : 'CANOPY', gx + 16 * u, gy + 14 * u, 14, '#ffc93c');
     txt(`${Math.max(0, Math.round(hd.agl * M_TO_FT))}`, gx + 16 * u, gy + 42 * u, 40, '#fff4d6');
     txt('FT', gx + 200 * u, gy + 62 * u, 14, '#ffc93c', 'right');
-    txt(sim.phase === 'free' ? `${Math.round(-hd.vs * MS_TO_MPH)} MPH DOWN` : 'STEER TO TARGET', gx + 16 * u, gy + 98 * u, 12, '#a9b4d6');
+    txt(sim.phase === 'free' ? `${Math.round(-hd.vs * MS_TO_MPH)} MPH DOWN` : `${Math.round(sim.vel.lenH() * MS_TO_MPH)} MPH FWD  ${Math.round(-hd.vs * MS_TO_MPH)} DOWN`, gx + 16 * u, gy + 98 * u, 12, '#a9b4d6');
+    if (sim.phase !== 'free' && !sim.done && hd.agl < 9 && hd.agl > 0.5 && !(Input.s.ly > 0.5)) txt('PULL BACK TO FLARE', Wd / 2, H * 0.62, 22, Math.floor(performance.now() / 200) % 2 ? '#ffc93c' : '#fff4d6', 'center');
     if (sim.phase === 'free' && hd.agl < 600) txt('PULL CHUTE  ✕', Wd / 2, H * 0.62, 24, Math.floor(performance.now() / 220) % 2 ? '#e8463a' : '#fff4d6', 'center');
   }
 
@@ -2139,6 +2149,26 @@ function drawHUD(dt) {
       c.beginPath(); c.moveTo(px - a, py); c.lineTo(px + a, py); c.moveTo(px, py - a); c.lineTo(px, py + a); c.stroke();
       c.strokeStyle = inside ? '#7ce07a' : '#ffffff'; c.lineWidth = 3 * u;
       c.beginPath(); c.moveTo(px - a, py); c.lineTo(px + a, py); c.moveTo(px, py - a); c.lineTo(px, py + a); c.stroke();
+    }
+  }
+  // canopy aid: a ring on the ground where the current glide will touch down
+  if (!sim.done && mode === 'skydive' && sim.phase !== 'free' && sim.vel.y < -0.5) {
+    let px = sim.pos.x, pz = sim.pos.z, gy = W.surfaceAt(px, pz);
+    for (let i = 0; i < 4; i++) {   // refine against the terrain height at the predicted spot
+      const tt = Math.max(0, (sim.pos.y - DIVER_FEET - gy) / -sim.vel.y);
+      px = sim.pos.x + sim.vel.x * tt; pz = sim.pos.z + sim.vel.z * tt; gy = W.surfaceAt(px, pz);
+    }
+    const L = course.landing, inside = Math.hypot(px - L.x, pz - L.z) <= L.r;
+    c.lineWidth = 3 * u;
+    for (const [w, colr] of [[6, '#141c38'], [3, inside ? '#7ce07a' : '#ffffff']]) {
+      c.strokeStyle = colr; c.lineWidth = w * u; c.beginPath(); let first = true, ok = true;
+      for (let k = 0; k <= 16; k++) {
+        const a = k / 16 * Math.PI * 2, q = new THREE.Vector3(px + Math.cos(a) * 4, gy + 0.3, pz + Math.sin(a) * 4).project(camera);
+        if (q.z > 1) { ok = false; break; }
+        const qx = (q.x * 0.5 + 0.5) * Wd, qy = (-q.y * 0.5 + 0.5) * H;
+        if (first) { c.moveTo(qx, qy); first = false; } else c.lineTo(qx, qy);
+      }
+      if (ok) c.stroke();
     }
   }
   if (!sim.done) {

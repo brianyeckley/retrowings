@@ -55,6 +55,13 @@ for (const key of Object.keys(S.COURSES)) {
   check(s.leanF > 1.2 && s.vel.len() > 30, `jetpack full lean flies flat out (${s.vel.len().toFixed(0)} m/s)`); }
 { const { s } = run('skydive', (t, s) => ({ crossP: s.phase === 'free' && s.agl < 450 }), 200);
   check(s.done && s.done.type === 'landed', `skydive with chute at 450 m lands safely (${s.done && s.done.type})`); }
+{ // canopy: brisk default glide; brakes slow you down but sink you faster; a flare near the ground lands softly
+  const fly = (ly, T) => run('skydive', (t, s) => ({ crossP: s.phase === 'free' && s.agl < 500, ly: s.phase === 'free' ? 0 : ly }), 200, null, true, s => s.phase === 'canopy' && (s.__t = (s.__t || 0) + 1 / 120) > T).s;
+  const n = fly(0, 10), b = fly(1, 10);
+  check(n.vel.lenH() > 15, `canopy glides forward at ${(n.vel.lenH() * 2.237).toFixed(0)} mph`);
+  check(b.vel.lenH() < n.vel.lenH() * 0.5 && -b.vel.y > -n.vel.y + 2, `canopy brakes: ${(b.vel.lenH() * 2.237).toFixed(0)} mph forward, sinking ${(-b.vel.y).toFixed(1)} vs ${(-n.vel.y).toFixed(1)} m/s`);
+  const { s: f } = run('skydive', (t, s) => ({ crossP: s.phase === 'free' && s.agl < 500, ly: s.phase !== 'free' && s.agl < 4 ? 1 : 0 }), 300);
+  check(f.done && f.done.type === 'landed' && f.done.vs < 5.5 && f.done.hs < 13.5, `canopy flare at 4 m lands softly (${f.done && f.done.vs.toFixed(1)} m/s down)`); }
 
 const r = { c: { x: 0, y: 0, z: 0 }, n: { x: 0, y: 0, z: -1 }, r: 10 };
 check(!!S.ringCross({ x: 1, y: 1, z: 1 }, { x: 1, y: 1, z: -1 }, r) && !S.ringCross({ x: 20, y: 1, z: 1 }, { x: 20, y: 1, z: -1 }, r), 'ring pass detection');
