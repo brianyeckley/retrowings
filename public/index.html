@@ -77,7 +77,10 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
 .btn { font-family: var(--font-display); font-size: 14px; letter-spacing: .06em; background: var(--ink); color: var(--cream); border: 3px solid var(--muted); padding: 10px 14px; cursor: pointer; }
 .btn.sel, .btn:focus-visible { border-color: var(--gold); color: var(--gold); outline: 0; }
 
-.menu { display: flex; flex-direction: column; gap: 10px; max-width: 360px; }
+.menu { display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+.btn .arr { color: var(--muted); }
+.btn.sel .arr { color: var(--gold); }
+.btn.adj { display: flex; justify-content: space-between; gap: 10px; }
 .score { width: 100%; border-collapse: collapse; font-size: 17px; font-variant-numeric: tabular-nums; margin-top: 10px; }
 .score td { padding: 6px 0; border-bottom: 2px dashed rgba(169,180,214,.35); }
 .score td:last-child { text-align: right; font-family: var(--font-display); font-size: 15px; }
@@ -140,7 +143,9 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
       <button class="btn" data-pause="music" id="p-music">Music 70%</button>
       <button class="btn" data-pause="sfx" id="p-sfx">Sound effects 90%</button>
       <button class="btn" data-pause="pixels" id="p-pixels">Pixels</button>
-      <div class="hint"><span data-btn="lr">◀ ▶</span> to change volume and pixels</div>
+      <button class="btn" data-pause="invx" id="p-invx">Look left / right: normal</button>
+      <button class="btn" data-pause="invy" id="p-invy">Look up / down: normal</button>
+      <div class="hint"><span data-btn="lr">◀ ▶</span> or click either side to change a setting</div>
     </div>
   </div>
 
@@ -840,7 +845,7 @@ function setPixels(step) {
   pPoints.material.size = 3 * pxScale();
   for (const fx of thermalFx) fx.pts.material.size = 2 * pxScale();
 }
-const pixelLabel = () => { const l = PIXEL_LEVELS.find(l => l[0] === RENDER_H); return `Pixels ◀ ${RENDER_H} lines${l && l[1] ? ' · ' + l[1] : ''} ▶`; };
+const pixelLabel = () => { const l = PIXEL_LEVELS.find(l => l[0] === RENDER_H); return `Pixels ${RENDER_H} lines${l && l[1] ? ' · ' + l[1] : ''}`; };
 window.addEventListener('resize', resize);
 resize();
 
@@ -1235,7 +1240,7 @@ function animateBiplane(dt, t, ud, live) {
   ud.wheels.forEach(w => { w.rotation.x = st.wheel; });
   // pilot glances into turns; the scarf streams back and flutters with airspeed
   const j = ud.rig.j;
-  rot(j.neck, -0.05 + st.elev * 0.15, -(st.ail * 0.5 + st.rud * 0.25) + (state === 'play' ? -Input.s.rx * 0.6 : 0), 0);
+  rot(j.neck, -0.05 + st.elev * 0.15, -(st.ail * 0.5 + st.rud * 0.25) + -lookInput().x * 0.6, 0);
   const f = clamp(speed / 40, 0, 1.2);
   ud.scarf.forEach((seg, i) => {
     const flap = Math.sin(t * (9 + speed * 0.3) - i * 1.3) * (0.15 + 0.25 * f);
@@ -2095,6 +2100,42 @@ window.addEventListener('keyup', e => Input.keys.delete(e.code));
 window.addEventListener('pointerdown', () => Sound.unlock());
 window.addEventListener('blur', () => Input.keys.clear());
 
+// ---------- look-around: right stick, arrow keys or the mouse; optional inversion ----------
+const lookInvert = { x: false, y: false };
+try { Object.assign(lookInvert, JSON.parse(localStorage.getItem('retrowings.look') || '{}')); } catch (e) { /* defaults */ }
+function saveLook() { try { localStorage.setItem('retrowings.look', JSON.stringify(lookInvert)); } catch (e) { /* storage unavailable */ } }
+// Mouse look: click the game to grab the pointer. The view follows the mouse and drifts back behind you
+// after a moment without movement, like letting go of the stick. Esc (or leaving the lesson) lets go.
+const mouseLook = { x: 0, y: 0, idle: 9 };
+const SENS = 0.0035;
+window.addEventListener('mousedown', e => {
+  if (state === 'play' && e.button === 0 && !document.pointerLockElement && document.body.requestPointerLock) {
+    try { const r = document.body.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) { /* not allowed */ }
+  }
+});
+window.addEventListener('mousemove', e => {
+  if (!document.pointerLockElement || state !== 'play') return;
+  if ((!e.movementX && !e.movementY) || Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return;   // ignore empty events and the jump some browsers send on lock
+  mouseLook.x = clamp(mouseLook.x + e.movementX * SENS, -1, 1);
+  mouseLook.y = clamp(mouseLook.y + e.movementY * SENS, -1, 1);
+  mouseLook.idle = 0; Input.setDevice('kb');
+});
+document.addEventListener('pointerlockchange', () => {
+  // Chrome swallows the first Esc to release the mouse, so treat losing the pointer mid-lesson as "pause".
+  if (!document.pointerLockElement && state === 'play' && !(sim && sim.done)) { state = 'pause'; pauseIndex = 0; renderVolume(); show('pause'); Sound.ui('pause'); }
+});
+function updateMouseLook(dt) {
+  if (state !== 'play') { if (document.pointerLockElement) document.exitPointerLock(); mouseLook.x = mouseLook.y = 0; return; }
+  mouseLook.idle += dt;
+  if (mouseLook.idle > 1.2) { mouseLook.x = damp(mouseLook.x, 0, 3, dt); mouseLook.y = damp(mouseLook.y, 0, 3, dt); }
+}
+// Combined look input in stick units (-1..1), inversion applied.
+function lookInput() {
+  if (state !== 'play') return { x: 0, y: 0 };
+  const x = clamp(Input.s.rx + mouseLook.x, -1, 1), y = clamp(Input.s.ry + mouseLook.y, -1, 1);
+  return { x: lookInvert.x ? -x : x, y: lookInvert.y ? -y : y };
+}
+
 // ---------- button names on screen: controller glyphs or keyboard keys, whichever was used last ----------
 // Keys are read by physical position (e.code), so labels come from the player's own layout when the browser
 // can tell us (Chrome/Edge keyboard layout map: Dvorak, AZERTY, ...). Otherwise QWERTY names.
@@ -2113,7 +2154,8 @@ const GLYPHS = {
   nav: ['Stick / D-pad', () => 'Arrow keys'], lr: ['◀ ▶', () => '← →'],
   lstick: ['Left stick', () => `${K('KeyW')} ${K('KeyA')} ${K('KeyS')} ${K('KeyD')}`],
   lstickUD: ['Left stick ↑ / ↓', () => `${K('KeyW')} / ${K('KeyS')}`], lstickLR: ['Left stick ← / →', () => `${K('KeyA')} / ${K('KeyD')}`],
-  rstick: ['Right stick', () => 'Arrow keys'],
+  rstick: ['Right stick', () => 'Mouse / arrows'],
+  lookDesc: ['Look around', () => 'Look around (click the game to grab the mouse, Esc lets go)'],
   throttle: ['✕ / □', () => `${K('Space')} / ${K('KeyC')}`], rudder: ['L1 / R1', () => `${K('KeyQ')} / ${K('KeyE')}`],
   thrustVerb: ['Squeeze R2', () => 'Hold Shift'],
   thrustDesc: ['Thrust, pressure-sensitive. About half pull hovers', () => 'Thrust: builds up while held, eases off when you let go. Feather it to hover'],
@@ -2139,10 +2181,10 @@ function refreshGlyphs() { for (const el of document.querySelectorAll('[data-btn
 const MODES = ['plane', 'glider', 'jetpack', 'skydive'];
 // Lesson controls: {tokens} turn into controller or keyboard names (see GLYPHS).
 const CONTROLS = {
-  plane: [['{lstick}', 'Pitch (forward = nose down) and bank'], ['{rudder}', 'Rudder left / right'], ['{throttle}', 'Throttle up / down (hold)'], ['{rstick}', 'Look around'], ['{options}', 'Pause']],
-  glider: [['{lstick}', 'Pitch (forward = dive, faster) and bank to turn'], ['{cross}', 'Flare: slow down, use it to land'], ['{rstick}', 'Look around'], ['{options}', 'Pause']],
-  jetpack: [['{r2}', '{thrustDesc}'], ['{lstickUD}', 'Lean forward / back. Push all the way to point the jets behind you and fly flat out'], ['{lstickLR}', 'Turn'], ['{rstick}', 'Look around'], ['{options}', 'Pause']],
-  skydive: [['{lstickUD}', '{skyUD}'], ['{lstickLR}', 'Turn'], ['{cross}', 'Pull the parachute'], ['Under canopy', '{canopyHow}'], ['{rstick}', 'Look around'], ['{options}', 'Pause']],
+  plane: [['{lstick}', 'Pitch (forward = nose down) and bank'], ['{rudder}', 'Rudder left / right'], ['{throttle}', 'Throttle up / down (hold)'], ['{rstick}', '{lookDesc}'], ['{options}', 'Pause']],
+  glider: [['{lstick}', 'Pitch (forward = dive, faster) and bank to turn'], ['{cross}', 'Flare: slow down, use it to land'], ['{rstick}', '{lookDesc}'], ['{options}', 'Pause']],
+  jetpack: [['{r2}', '{thrustDesc}'], ['{lstickUD}', 'Lean forward / back. Push all the way to point the jets behind you and fly flat out'], ['{lstickLR}', 'Turn'], ['{rstick}', '{lookDesc}'], ['{options}', 'Pause']],
+  skydive: [['{lstickUD}', '{skyUD}'], ['{lstickLR}', 'Turn'], ['{cross}', 'Pull the parachute'], ['Under canopy', '{canopyHow}'], ['{rstick}', '{lookDesc}'], ['{options}', 'Pause']],
 };
 
 let state = 'loading', mode = 'plane', course = null, sim = null, run = null, endTimer = 0, selIndex = 0, pauseIndex = 0, resultIndex = 0;
@@ -2634,7 +2676,7 @@ function updateCamera(dt) {
   }
   const off = dir.clone().multiplyScalar(-dist).add(new THREE.Vector3(0, height, 0));
   // look-around: stick deflection sets the view angle, springs back when released
-  const rx = state === 'play' ? Input.s.rx : 0, ry = state === 'play' ? Input.s.ry : 0;
+  const { x: rx, y: ry } = lookInput();
   cam.yaw = damp(cam.yaw, -rx * Math.PI * 0.9, 7, dt);
   cam.pitch = damp(cam.pitch, ry * 0.85, 7, dt);
   off.applyAxisAngle(new THREE.Vector3(0, 1, 0), cam.yaw);
@@ -2843,8 +2885,7 @@ function menuInput() {
     if (p.up) { pauseIndex = (pauseIndex + btns.length - 1) % btns.length; Sound.ui('move'); }
     btns.forEach((b, i) => b.classList.toggle('sel', i === pauseIndex));
     const which = btns[pauseIndex].dataset.pause;
-    if ((p.left || p.right) && (which === 'music' || which === 'sfx')) { Sound.setVol(which, Sound.vol[which] + (p.right ? 0.1 : -0.1)); Sound.ui('move'); renderVolume(); }
-    if ((p.left || p.right) && which === 'pixels') { setPixels(p.right ? 1 : -1); Sound.ui('move'); renderVolume(); }
+    if ((p.left || p.right) && ADJUSTABLE.includes(which)) adjustSetting(which, p.right ? 1 : -1);
     if (p.cross) pauseAction(which);
     if (p.circle || p.options) pauseAction('resume');
   } else if (state === 'results') {
@@ -2853,19 +2894,37 @@ function menuInput() {
     if (p.triangle) { Sound.ui('ok'); startReplay(); }
   }
 }
-function renderVolume() {
-  document.getElementById('p-music').textContent = `Music ${Math.round(Sound.vol.music * 100)}%`;
-  document.getElementById('p-sfx').textContent = `Sound effects ${Math.round(Sound.vol.sfx * 100)}%`;
-  document.getElementById('p-pixels').textContent = pixelLabel();
+// Settings rows: ◀ / ▶ (or clicking the left / right half) lower / raise; ✕ steps up and wraps around.
+const ADJUSTABLE = ['music', 'sfx', 'pixels', 'invx', 'invy'];
+function adjustSetting(which, dir, wrap = false) {
+  if (which === 'music' || which === 'sfx') {
+    let v = Sound.vol[which] + dir * 0.1;
+    if (wrap && v > 1.05) v = 0;
+    Sound.setVol(which, clamp(v, 0, 1));
+  } else if (which === 'pixels') {
+    const top = RENDER_H === PIXEL_LEVELS[PIXEL_LEVELS.length - 1][0];
+    setPixels(wrap && top ? -99 : dir);
+  } else { lookInvert[which === 'invx' ? 'x' : 'y'] = !lookInvert[which === 'invx' ? 'x' : 'y']; saveLook(); }
+  Sound.ui('move'); renderVolume();
 }
-function pauseAction(a) {
-  if (a === 'pixels') { const top = RENDER_H === PIXEL_LEVELS[PIXEL_LEVELS.length - 1][0]; setPixels(top ? -99 : 1); renderVolume(); Sound.ui('move'); return; }
-  if (a === 'music' || a === 'sfx') { const v = Sound.vol[a] + 0.1; Sound.setVol(a, v > 1.05 ? 0 : v); renderVolume(); Sound.ui('move'); return; }
+function renderVolume() {
+  const row = (id, label) => { const el = document.getElementById(id); el.classList.add('adj'); el.innerHTML = `<span class="arr">◀</span><span>${label}</span><span class="arr">▶</span>`; };
+  row('p-music', `Music ${Math.round(Sound.vol.music * 100)}%`);
+  row('p-sfx', `Sound effects ${Math.round(Sound.vol.sfx * 100)}%`);
+  row('p-pixels', pixelLabel());
+  row('p-invx', `Look left / right: ${lookInvert.x ? 'inverted' : 'normal'}`);
+  row('p-invy', `Look up / down: ${lookInvert.y ? 'inverted' : 'normal'}`);
+}
+function pauseAction(a, dir = 0) {
+  if (ADJUSTABLE.includes(a)) { adjustSetting(a, dir || 1, !dir); return; }
   if (a === 'resume') { state = 'play'; show(null); }
   else if (a === 'restart') { startMode(mode); beginPlay(); }
   else goSelect();
 }
-document.querySelectorAll('[data-pause]').forEach(b => b.addEventListener('click', () => pauseAction(b.dataset.pause)));
+document.querySelectorAll('[data-pause]').forEach(b => b.addEventListener('click', e => {
+  const r = b.getBoundingClientRect();
+  pauseAction(b.dataset.pause, e.clientX < r.left + r.width / 2 ? -1 : 1);   // left half lowers, right half raises
+}));
 document.getElementById('screen-title').addEventListener('click', () => { if (state === 'title') goSelect(); });
 
 // ===================== MAIN LOOP =====================
@@ -2874,6 +2933,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   Input.poll(dt);
+  updateMouseLook(dt);
   if (Input.p.any) Sound.unlock();   // some browsers count a controller press as a user gesture
   if (state === 'loading') return;
   if (state === 'play') {
