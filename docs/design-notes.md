@@ -6,6 +6,7 @@
 - Camera: chase cam behind each vehicle; right stick looks around and springs back on release.
 - Scoring (all lessons): 10 per ring, +5 for a perfect center pass, up to 50 for landing, up to 20 time bonus vs par. Medals: gold ≥85%, silver ≥70%, bronze ≥55% of max. Crash = no landing or time points, no medal.
 - Units shown in the HUD: feet and mph.
+- Look: 3D view rendered at a low resolution and scaled up with hard pixel edges; resolution is a player setting (default 360 lines, original 270) while the final value is being decided.
 - Controller selection: prefers Sony / standard-mapped gamepads and ignores keyboard and mouse receivers (e.g. Keychron Link) that also report as gamepads; the pad you press becomes active.
 
 ## Controls
@@ -22,6 +23,7 @@
 - Skydiving: drop at 1300 m, 4 freefall rings ~190 m apart vertically, canopy to bullseye.
 
 ## Change log
+- v8: Pixels setting in the pause menu (◀ ▶): the 3D view renders at 180 (Chunky), 216, 270 (Classic, the original), 324, 360 (Crisp, new default), 432, 540 (Sharp) or 720 (Smooth) lines and is scaled up with hard pixel edges. Saved per browser. HUD always draws at 540 lines; particle and sparkle sizes scale with the setting.
 - v7: canopy rework. Default glide 40 mph forward / 12 mph down (was 25); stick forward dives to 63 mph (steep, risky to land); stick back brakes to 13 mph but sinks faster (19 mph). Slowing down quickly turns forward speed into lift: pulling back ~3–5 m up (5–8 m when diving in) gives a soft landing. Landing limits: soft under 5.5 m/s down and 30 mph forward; crash over 9 m/s down or 47 mph forward. HUD adds a ground ring where the glide will land (green over the bullseye), forward/sink readout, and a flare prompt. CI checks glide speed, brake behavior and the flare.
 - v6: rebuilt biplane: faceted tapered fuselage, radial engine with cylinder heads and exhaust stubs (puffs that thicken with throttle), wooden prop that blurs into a disc at high revs, ribbed wings with rounded tips, N-struts and bracing wires, swept fin with striped rudder, spoked wheels that roll, roundels, open cockpit with a leather-helmeted pilot whose scarf streams in the wind and who glances into turns. Ailerons, elevator and rudder move with the stick and L1/R1. Drop plane uses the same model in blue. Plane ground contact raised to match the scaled model.
 - v5: faster thermals (core lift 11.5–13 m/s across a 70 m core, plus inflow that draws a circling glider to the center; a typical 300 m climb now takes ~30 s instead of 1.5–3+ min), glider par 3:30. New jointed pilot (helmet, goggles, shaped torso, elbows, gloves, knees, boots) shared by the glider, jetpack and skydiving lessons, with two-bone IK for hands on bars, grips and toggles. Animation: glider pilot hangs prone and weight-shifts into turns, swings upright to land and runs it out; jetpack legs dangle, brace for landing and stream back in flat-out flight, head looks into turns; skydiver arches in a box position, sweeps arms back to dive, spreads wide to slow, legs flutter in the wind, hands work the toggles under canopy.

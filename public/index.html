@@ -111,7 +111,8 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
       <button class="btn" data-pause="select" id="p-select">Choose lesson</button>
       <button class="btn" data-pause="music" id="p-music">Music 70%</button>
       <button class="btn" data-pause="sfx" id="p-sfx">Sound effects 90%</button>
-      <div class="hint">◀ ▶ to change volume</div>
+      <button class="btn" data-pause="pixels" id="p-pixels">Pixels</button>
+      <div class="hint">◀ ▶ to change volume and pixels</div>
     </div>
   </div>
 
@@ -673,15 +674,29 @@ const HORIZON = new THREE.Color('#cfe9f7');
 scene.background = HORIZON.clone();
 scene.fog = new THREE.Fog(HORIZON, 700, 3300);
 const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.5, 5200);
-const RENDER_H = 270;
+// The 3D view is drawn at a low resolution and scaled up with hard pixel edges. The pause menu picks the
+// number of lines (saved per browser); the HUD always draws at 540 lines so it looks the same at every setting.
+const PIXEL_LEVELS = [[180, 'Chunky'], [216, ''], [270, 'Classic'], [324, ''], [360, 'Crisp'], [432, ''], [540, 'Sharp'], [720, 'Smooth']];
+let RENDER_H = 360;
+try { const v = +localStorage.getItem('retrowings.pixels'); if (PIXEL_LEVELS.some(l => l[0] === v)) RENDER_H = v; } catch (e) { /* default */ }
 let RW = 480, RH = RENDER_H;
+const pxScale = () => RH / 270;   // point sprites (particles, sparkles) keep the same on-screen size
 function resize() {
   const a = Math.max(0.5, window.innerWidth / Math.max(1, window.innerHeight));
   RH = RENDER_H; RW = Math.round(RH * a);
   renderer.setSize(RW, RH, false);
   camera.aspect = RW / RH; camera.updateProjectionMatrix();
-  hudCanvas.width = RW * 2; hudCanvas.height = RH * 2;
+  hudCanvas.width = Math.round(540 * a); hudCanvas.height = 540;
 }
+function setPixels(step) {
+  const i = PIXEL_LEVELS.findIndex(l => l[0] === RENDER_H);
+  RENDER_H = PIXEL_LEVELS[clamp(i + step, 0, PIXEL_LEVELS.length - 1)][0];
+  try { localStorage.setItem('retrowings.pixels', String(RENDER_H)); } catch (e) { /* storage unavailable */ }
+  resize();
+  pPoints.material.size = 3 * pxScale();
+  for (const fx of thermalFx) fx.pts.material.size = 2 * pxScale();
+}
+const pixelLabel = () => { const l = PIXEL_LEVELS.find(l => l[0] === RENDER_H); return `Pixels ◀ ${RENDER_H} lines${l && l[1] ? ' · ' + l[1] : ''} ▶`; };
 window.addEventListener('resize', resize);
 resize();
 
@@ -1323,7 +1338,7 @@ const particles = { pos: new Float32Array(PMAX * 3), col: new Float32Array(PMAX 
 const pGeo = new THREE.BufferGeometry();
 pGeo.setAttribute('position', new THREE.BufferAttribute(particles.pos, 3));
 pGeo.setAttribute('color', new THREE.BufferAttribute(particles.col, 3));
-const pPoints = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 3, sizeAttenuation: false, vertexColors: true }));
+const pPoints = new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 3 * pxScale(), sizeAttenuation: false, vertexColors: true }));
 pPoints.frustumCulled = false; scene.add(pPoints);
 for (let i = 0; i < PMAX; i++) particles.pos[i * 3 + 1] = -9999;
 function emit(p, n, color, speed, life, grav = 0, spread = 1, base = null) {
@@ -1372,8 +1387,8 @@ function buildCourseVisuals(course) {
     const n = 70, arr = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * t.r * 1.1; arr.set([t.x + Math.cos(a) * rr, t.base + Math.random() * h, t.z + Math.sin(a) * rr], i * 3); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(arr, 3));
-    const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: '#fffbe0', size: 2, sizeAttenuation: false }));
-    courseGroup.add(pts); thermalFx.push({ g, t, h });
+    const pts = new THREE.Points(g, new THREE.PointsMaterial({ color: '#fffbe0', size: 2 * pxScale(), sizeAttenuation: false }));
+    courseGroup.add(pts); thermalFx.push({ g, t, h, pts });
   }
   beacon = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 500, 6, 1, true), new THREE.MeshBasicMaterial({ color: '#ffe680', transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending }));
   beacon.position.set(course.target.x, course.target.y + 250, course.target.z);
@@ -2230,6 +2245,7 @@ function menuInput() {
     btns.forEach((b, i) => b.classList.toggle('sel', i === pauseIndex));
     const which = btns[pauseIndex].dataset.pause;
     if ((p.left || p.right) && (which === 'music' || which === 'sfx')) { Sound.setVol(which, Sound.vol[which] + (p.right ? 0.1 : -0.1)); Sound.ui('move'); renderVolume(); }
+    if ((p.left || p.right) && which === 'pixels') { setPixels(p.right ? 1 : -1); Sound.ui('move'); renderVolume(); }
     if (p.cross) pauseAction(which);
     if (p.circle || p.options) pauseAction('resume');
   } else if (state === 'results') {
@@ -2240,8 +2256,10 @@ function menuInput() {
 function renderVolume() {
   document.getElementById('p-music').textContent = `Music ${Math.round(Sound.vol.music * 100)}%`;
   document.getElementById('p-sfx').textContent = `Sound effects ${Math.round(Sound.vol.sfx * 100)}%`;
+  document.getElementById('p-pixels').textContent = pixelLabel();
 }
 function pauseAction(a) {
+  if (a === 'pixels') { const top = RENDER_H === PIXEL_LEVELS[PIXEL_LEVELS.length - 1][0]; setPixels(top ? -99 : 1); renderVolume(); Sound.ui('move'); return; }
   if (a === 'music' || a === 'sfx') { const v = Sound.vol[a] + 0.1; Sound.setVol(a, v > 1.05 ? 0 : v); renderVolume(); Sound.ui('move'); return; }
   if (a === 'resume') { state = 'play'; show(null); }
   else if (a === 'restart') { startMode(mode); beginPlay(); }
