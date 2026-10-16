@@ -247,13 +247,14 @@ const COURSES = {
     landing: { type: 'runway', ax: -150, az: 760, bx: -150, bz: 20, w: 30, markerZ: 430 },
   },
   glider: {
-    name: 'Hang Glider', short: 'HANG GLIDER', par: 225, ringR: 16,
+    name: 'Hang Glider', short: 'HANG GLIDER', par: 200, ringR: 16,
     desc: 'Ride the thermals up to the high rings, then hit the bullseye.',
-    goal: 'Glide through the first ring, then circle in each thermal (look for the rising sparkles) to climb before gliding out to the next ring. The last ring sits on a long final glide to the bullseye: nose down a little if you are high. Flare with ✕ just before touchdown.',
+    goal: 'Glide through the first ring, then circle in each thermal (look for the rising sparkles) to climb before gliding out to the next ring. After ring 3, turn for home: dive through the low ring 4 and float on to the bullseye straight ahead. Flare with ✕ just before touchdown.',
     spawn: { x: -800, z: 950, agl: 170, speed: 14 },
     // Easy course: every ring sits in calm air, at least 250 m from any thermal. Climb in a thermal, then glide out to the ring.
-    rings: [[-805, 830, 150], [-1080, 480, 300], [-1000, -140, 320], [-450, 700, 130]],
-    thermals: [{ x: -840, z: 560, r: 70, lift: 12, top: 400 }, { x: -1080, z: 150, r: 70, lift: 13, top: 420 }, { x: -760, z: -330, r: 70, lift: 11.5, top: 420 }],
+    // Final leg runs straight home from the west: ring 3 at the far point, a dive through low ring 4, then a short float to the bullseye.
+    rings: [[-805, 830, 150], [-1080, 480, 200], [-1470, -150, 300], [-760, -150, 60]],
+    thermals: [{ x: -840, z: 560, r: 70, lift: 12, top: 400 }, { x: -1080, z: 150, r: 70, lift: 13, top: 420 }, { x: -1250, z: -440, r: 70, lift: 11.5, top: 420 }],
     landing: { type: 'target', x: -450, z: -150, r: 20 },
   },
   jetpack: {
