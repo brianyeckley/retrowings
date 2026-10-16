@@ -2562,7 +2562,7 @@ function syncVehicle(dt) {
   else if (mode === 'skydive') animateSkydiver(dt, animClock);
   // blob shadow
   const gy = W.surfaceAt(sim.pos.x, sim.pos.z), h = sim.pos.y - gy;
-  shadow.position.set(sim.pos.x, gy + 0.2, sim.pos.z);
+  shadow.position.set(sim.pos.x, gy + 0.45, sim.pos.z);   // just above the runway strip and its markings
   const sz = mode === 'plane' ? 5 : mode === 'glider' ? 4.5 : 1.3;
   shadow.scale.setScalar(sz * (1 + h / 120));
   shadow.material.opacity = 0.38 * clamp(1 - h / 140, 0, 1);
@@ -2570,6 +2570,8 @@ function syncVehicle(dt) {
 }
 
 const cam = { pos: new THREE.Vector3(), look: new THREE.Vector3(), yaw: 0, pitch: 0, init: false, t: 0 };
+// Skydiving: once you've dropped below a ring you can't climb back to it, so it's missed.
+function ringMissed(r) { return mode === 'skydive' && !!sim && sim.pos.y < r.c.y - 3; }
 function updateCamera(dt) {
   const p = tv(sim.pos), fwd = tv(sim.q.rot(F0));
   let head = new THREE.Vector3(fwd.x, 0, fwd.z);
@@ -2693,7 +2695,7 @@ function drawHUD(dt) {
   }
 
   // objective marker: next ring, then the landing spot
-  const nextRing = course.rings.find(r => !r.done);
+  const nextRing = course.rings.find(r => !r.done && !ringMissed(r));
   const objPos = nextRing ? tv(nextRing.c) : tv(course.target);
   const label = nextRing ? 'RING' : (mode === 'plane' ? 'RUNWAY' : 'TARGET');
   const dist = objPos.distanceTo(tv(sim.pos));
@@ -2843,10 +2845,11 @@ function frame(now) {
   }
   // ring animation
   const tnow = now / 1000;
-  const nextIdx = course.rings.findIndex(r => !r.done);
+  const nextIdx = course.rings.findIndex(r => !r.done && !ringMissed(r));
   ringMeshes.forEach((m, i) => {
     const r = course.rings[i];
-    if (r.done) { m.material.opacity = Math.max(0, m.material.opacity - dt * 1.5); m.userData.core.material.opacity = m.material.opacity * 0.75; m.scale.multiplyScalar(1 + dt * 0.8); m.visible = m.material.opacity > 0.01; }
+    if (!r.done && ringMissed(r)) { m.material.opacity = damp(m.material.opacity, 0.25, 3, dt); m.userData.core.material.opacity = 0.1; m.material.emissiveIntensity = 0; m.material.color.set('#8a8f9c'); }
+    else if (r.done) { m.material.opacity = Math.max(0, m.material.opacity - dt * 1.5); m.userData.core.material.opacity = m.material.opacity * 0.75; m.scale.multiplyScalar(1 + dt * 0.8); m.visible = m.material.opacity > 0.01; }
     else { m.material.opacity = 1; m.userData.core.material.opacity = i === nextIdx ? 0.85 : 0.45; m.material.emissiveIntensity = i === nextIdx ? 0.45 + 0.4 * Math.sin(tnow * 6) : 0.12; m.material.color.set(i === nextIdx ? '#ffc93c' : '#d9a53a'); }
   });
   if (beacon) beacon.material.opacity = nextIdx === -1 ? 0.3 + 0.12 * Math.sin(tnow * 4) : 0.1;
@@ -2893,7 +2896,7 @@ async function boot() {
   let start = 'heartland';
   try { const v = localStorage.getItem('retrowings.level'); if (LEVELS[v] && levelUnlocked(v)) start = v; } catch (e) { /* default */ }
   loadLevel(start);
-  shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.35, depthWrite: false }));
+  shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.35, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
   shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
   try { await document.fonts.load('16px Silkscreen'); } catch (e) { /* fallback font */ }
   startMode('plane');
