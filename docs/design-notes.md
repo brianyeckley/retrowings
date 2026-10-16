@@ -10,6 +10,7 @@
 - Controller selection: prefers Sony / standard-mapped gamepads and ignores keyboard and mouse receivers (e.g. Keychron Link) that also report as gamepads; the pad you press becomes active.
 
 ## Controls
+On-screen prompts show controller buttons or keyboard keys, whichever was used last. Keyboard: WASD = left stick, arrows = right stick / menus, Space = ✕ (Enter in menus), C = □, R = △, Q / E = L1 / R1, Shift = R2, Esc = Options / Back. Keys are physical positions (labels follow the player's layout). Skydiving: W = halfway forward (track), Shift + W = full.
 - Biplane: left stick pitch/bank · L1/R1 rudder · ✕/□ throttle up/down (gauge on screen).
 - Hang glider: left stick pitch/bank · ✕ flare. Thermals (rising sparkles) give strong lift and gently draw you toward their core.
 - Jetpack: R2 analog thrust (about half pull hovers) · left stick up/down leans (full forward ≈ 80°, jets pointing back, SNES-style flat-out flight) · left stick left/right turns · fuel gauge.
@@ -34,6 +35,7 @@ Each level is a full map with all four lessons, its own look, music and vehicle 
 - Skins: teal biplane with wheel spats, terracotta drop plane, purple swept-wing glider, red jetpack suit with gold finned tanks, turquoise skydiver with a purple/yellow/teal canopy.
 
 ## Change log
+- v13.3: keyboard-aware prompts. The game tracks the last device used (keyboard or controller, remembered between visits) and every on-screen button name follows it: title, lesson screen, briefings (controls table and goal text), pause, results, replay bar and the PULL CHUTE prompt. Keys are read by physical position, so labels come from the player's own layout via the browser's keyboard layout map (Chrome/Edge; Dvorak shows , A O E for the WASD keys), falling back to QWERTY names. Esc now also works as Back in menus. Skydiving on keyboard: W tracks (halfway forward), Shift + W dives.
 - v13.2: plane shadow no longer flickers on the runway (it sat at exactly the strip's top surface and z-fought; now 0.45 m up with polygon offset). Skydiving: a ring you've fallen more than 3 m below counts as missed for guidance: the arrow and highlight move on to the next ring below you and the missed ring fades to grey.
 - v13.1: fix blank screen when the biplane points straight up or down (e.g. stalling a vertical climb). The chase camera fell back to a heading the plane sim doesn't have and went NaN for good; it now keeps the last valid heading.
 - v13: second level, Red Rock Canyon, unlocked by silver or better in all four Heartland lessons. Levels table (terrain, plants, courses, unlock) in the sim; per-level sky, colors, scenery, music and vehicle skins on the render side. Lesson screen gets level tabs (L1 / R1), a lock panel with progress, a "Flying to…" travel screen and an unlock banner on the results screen. Bests saved per level (old saves migrated to Heartland). Only the current lesson's bullseye is drawn. `#unlockall` URL testing aid. CI checks every level's courses (dry starts and landings, rings clear of terrain, flat bullseyes).

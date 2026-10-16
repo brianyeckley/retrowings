@@ -13,7 +13,7 @@ Scoring: 10 per ring, +5 for a perfect center pass, up to 50 for the landing, up
 
 All sound and music is synthesized in the browser, so there are no audio files. Music and effects volume and the Pixels setting (how chunky the 3D view looks) live in the pause menu.
 
-Play in Chrome or Edge. Plug the controller in and press any button once the page loads. Keyboard works too (controls are listed on each lesson's briefing screen).
+Play in Chrome or Edge. Plug the controller in and press any button once the page loads. Keyboard works too: once you press a key, every prompt switches to keyboard keys (labelled for your own layout in Chrome and Edge, so Dvorak and AZERTY players see the right keys).
 
 ## Project layout
 

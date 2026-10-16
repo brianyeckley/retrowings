@@ -113,7 +113,7 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
   <div id="screen-title" class="screen" hidden>
     <div class="logo">RETRO<br>WINGS</div>
     <div class="tagline">Flight school over the heartland</div>
-    <div class="blink">Press ✕ to start</div>
+    <div class="blink">Press <span data-btn="start">✕</span> to start</div>
     <div class="padline" id="padline">Plug in your controller and press any button. Keyboard works too (Enter).</div>
     <div class="padline" id="soundline">Click anywhere or press a key to turn on sound.</div>
   </div>
@@ -123,7 +123,7 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
     <h2 id="select-title">Choose your lesson</h2>
     <div class="cards" id="cards"></div>
     <div class="panel lockpanel" id="lockpanel" hidden></div>
-    <div class="hint">Stick / D-pad to choose · ✕ fly · ○ back · L1 / R1 change level</div>
+    <div class="hint"><span data-btn="nav">Stick / D-pad</span> to choose · <span data-btn="ok">✕</span> fly · <span data-btn="back">○</span> back · <span data-btn="l1">L1</span> / <span data-btn="r1">R1</span> change level</div>
   </div>
   <div id="screen-travel" class="screen" hidden><div class="tagline" id="travel-msg">Flying to the canyon…</div></div>
 
@@ -140,7 +140,7 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
       <button class="btn" data-pause="music" id="p-music">Music 70%</button>
       <button class="btn" data-pause="sfx" id="p-sfx">Sound effects 90%</button>
       <button class="btn" data-pause="pixels" id="p-pixels">Pixels</button>
-      <div class="hint">◀ ▶ to change volume and pixels</div>
+      <div class="hint"><span data-btn="lr">◀ ▶</span> to change volume and pixels</div>
     </div>
   </div>
 
@@ -274,7 +274,7 @@ const COURSES_HEARTLAND = {
   glider: {
     name: 'Hang Glider', short: 'HANG GLIDER', par: 200, ringR: 16,
     desc: 'Ride the thermals up to the high rings, then hit the bullseye.',
-    goal: 'Glide through the first ring, then circle in each thermal (look for the rising sparkles) to climb before gliding out to the next ring. After ring 3, turn for home: dive through the low ring 4 and float on to the bullseye straight ahead. Flare with ✕ just before touchdown.',
+    goal: 'Glide through the first ring, then circle in each thermal (look for the rising sparkles) to climb before gliding out to the next ring. After ring 3, turn for home: dive through the low ring 4 and float on to the bullseye straight ahead. Flare with {cross} just before touchdown.',
     spawn: { x: -800, z: 950, agl: 170, speed: 14 },
     // Easy course: every ring sits in calm air, at least 250 m from any thermal. Climb in a thermal, then glide out to the ring.
     // Final leg runs straight home from the west: ring 3 at the far point, a dive through low ring 4, then a short float to the bullseye.
@@ -284,7 +284,7 @@ const COURSES_HEARTLAND = {
   },
   jetpack: {
     name: 'Jetpack', short: 'JETPACK', par: 120, ringR: 7,
-    desc: 'Squeeze R2 to hover, lean to fly, land on the bullseye.',
+    desc: '{thrustVerb} to hover, lean to fly, land on the bullseye.',
     goal: 'Lift off the pad, weave through the low rings over the lake, then land softly on the bullseye. Watch your fuel.',
     spawn: { x: 820, z: 760, ground: true },
     rings: [[860, 650, 20], [950, 520, 35], [1040, 400, 15], [1200, 300, 40], [1120, 120, 25], [950, 90, 45]],
@@ -293,7 +293,7 @@ const COURSES_HEARTLAND = {
   skydive: {
     name: 'Skydiving', short: 'SKYDIVING', par: 110, ringR: 20,
     desc: 'Freefall through the rings, pull the chute, land on target.',
-    goal: 'Fall through the rings. Push the stick halfway forward to track (fastest forward travel), all the way to dive straight down, and pull back to spread flat and slow your fall. The white cross shows where you will pass the next ring. Pull the chute with ✕, then steer onto the bullseye. The marker on the ground shows where your glide will land you. Flare by pulling back just before touchdown.',
+    goal: 'Fall through the rings. {trackHow} to track (fastest forward travel), {diveHow} to dive straight down, and {backHow} to spread flat and slow your fall. The white cross shows where you will pass the next ring. Pull the chute with {cross}, then steer onto the bullseye. The marker on the ground shows where your glide will land you. Flare by {flareHow} just before touchdown.',
     spawn: { x: -400, z: 200, agl: 1300, speed: 35 },
     rings: [[-370, 150, 1120], [-330, 95, 930], [-310, 30, 740], [-265, -20, 560]],
     vertical: true,
@@ -353,7 +353,7 @@ const COURSES_CANYON = {
   glider: {
     name: 'Hang Glider', short: 'HANG GLIDER', par: 290, ringR: 16,
     desc: 'Dive into the canyon, thermal out, soar over the butte.',
-    goal: 'Launch off the west mesa and dive into the canyon for ring 1. A thermal rises from the canyon floor: circle inside the walls to climb out, glide over the east mesa, use the thermal on the mesa top to reach the ring over the butte, then dive low across the desert to the bullseye. Flare with ✕ just before touchdown.',
+    goal: 'Launch off the west mesa and dive into the canyon for ring 1. A thermal rises from the canyon floor: circle inside the walls to climb out, glide over the east mesa, use the thermal on the mesa top to reach the ring over the butte, then dive low across the desert to the bullseye. Flare with {cross} just before touchdown.',
     spawn: { x: -700, z: -260, agl: 80, speed: 14 },
     rings: [[-582, -600, 100], [-250, -1100, 130], [620, -260, 60], [200, 450, 40]],
     thermals: [{ x: -676, z: -820, r: 60, lift: 13, top: 400 }, { x: 200, z: -650, r: 70, lift: 12, top: 300 }],
@@ -370,7 +370,7 @@ const COURSES_CANYON = {
   skydive: {
     name: 'Skydiving', short: 'SKYDIVING', par: 120, ringR: 20,
     desc: 'Track over the canyon through the rings, land on the mesa.',
-    goal: 'Jump over the canyon and track hard (stick halfway forward) to reach each ring as you fall. Pull the chute with ✕, then steer onto the bullseye on top of the east mesa. Flare by pulling back just before touchdown.',
+    goal: 'Jump over the canyon and track hard ({trackShort}) to reach each ring as you fall. Pull the chute with {cross}, then steer onto the bullseye on top of the east mesa. Flare by {flareHow} just before touchdown.',
     spawn: { x: -720, z: -260, agl: 1450, speed: 35 },
     rings: [[-644, -339, 1252], [-574, -411, 1093], [-505, -483, 1020], [-435, -555, 736]],
     vertical: true,
@@ -2017,6 +2017,13 @@ const Sound = (() => {
 // Action-style input (mirrors a Godot InputMap): sticks, triggers and named buttons.
 const Input = {
   s: {}, prev: {}, p: {}, keys: new Set(), taps: new Set(), kbR2: 0, padId: null,
+  device: (() => { try { return localStorage.getItem('retrowings.device'); } catch (e) { return null; } })(),   // 'pad' | 'kb' | null (unknown)
+  kbTrack: false,   // skydiving: W alone = halfway forward (track), Shift + W = all the way
+  setDevice(d) {
+    if (this.device === d) return;
+    this.device = d; try { localStorage.setItem('retrowings.device', d); } catch (e) { /* storage unavailable */ }
+    refreshGlyphs();
+  },
   activePad: null,
   // Some keyboard/mouse dongles (e.g. Keychron Link) also show up as "gamepads".
   // Prefer a real controller: Sony / standard-mapped pads first, and switch to whichever pad you actually press.
@@ -2052,16 +2059,17 @@ const Input = {
     const b = i => pad && pad.buttons[i] ? pad.buttons[i] : { pressed: false, value: 0 };
     const key = (...c) => c.some(x => k.has(x) || this.taps.has(x));
     lx = clamp(lx + (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0), -1, 1);
-    ly = clamp(ly + (key('KeyS') ? 1 : 0) - (key('KeyW') ? 1 : 0), -1, 1);
+    const shift = key('ShiftLeft', 'ShiftRight');
+    ly = clamp(ly + (key('KeyS') ? 1 : 0) - (key('KeyW') ? (this.kbTrack && !shift ? 0.55 : 1) : 0), -1, 1);
     rx = clamp(rx + (key('ArrowRight') ? 1 : 0) - (key('ArrowLeft') ? 1 : 0), -1, 1);
     ry = clamp(ry + (key('ArrowDown') ? 1 : 0) - (key('ArrowUp') ? 1 : 0), -1, 1);
-    this.kbR2 = damp(this.kbR2, key('ShiftLeft', 'ShiftRight') ? 1 : 0, key('ShiftLeft', 'ShiftRight') ? 2.5 : 3.5, dt);
+    this.kbR2 = this.kbTrack ? 0 : damp(this.kbR2, shift ? 1 : 0, shift ? 2.5 : 3.5, dt);
     s.lx = lx; s.ly = ly; s.rx = rx; s.ry = ry;
     s.l1 = (b(4).pressed || key('KeyQ')) ? 1 : 0;
     s.r1 = (b(5).pressed || key('KeyE')) ? 1 : 0;
     s.r2 = Math.max(b(7).value || 0, this.kbR2 > 0.01 ? this.kbR2 : 0);
     s.cross = b(0).pressed || key('Space', 'Enter');
-    s.circle = b(1).pressed || key('Backspace');
+    s.circle = b(1).pressed || key('Backspace', 'Escape');
     s.square = b(2).pressed || key('KeyC', 'ControlLeft');
     s.triangle = b(3).pressed || key('KeyR');
     s.options = b(9).pressed || key('Escape', 'KeyP');
@@ -2070,6 +2078,7 @@ const Input = {
     s.left = b(14).pressed || lx < -0.6 || key('ArrowLeft');
     s.right = b(15).pressed || lx > 0.6 || key('ArrowRight');
     s.any = s.cross || s.options || (pad && pad.buttons.some(bt => bt.pressed));
+    if (pad && (pad.buttons.some(bt => bt.pressed) || pad.axes.some(v => Math.abs(v) > 0.5))) this.setDevice('pad');
     for (const n of ['cross', 'circle', 'square', 'triangle', 'options', 'up', 'down', 'left', 'right', 'any', 'l1', 'r1']) this.p[n] = s[n] && !this.prev[n];
     this.prev = s; this.s = s;
     s.crossP = this.p.cross;
@@ -2078,6 +2087,7 @@ const Input = {
 };
 window.addEventListener('keydown', e => {
   Input.keys.add(e.code); if (!e.repeat) Input.taps.add(e.code);
+  Input.setDevice('kb');
   Sound.unlock();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Backspace'].includes(e.code)) e.preventDefault();
 });
@@ -2085,19 +2095,54 @@ window.addEventListener('keyup', e => Input.keys.delete(e.code));
 window.addEventListener('pointerdown', () => Sound.unlock());
 window.addEventListener('blur', () => Input.keys.clear());
 
+// ---------- button names on screen: controller glyphs or keyboard keys, whichever was used last ----------
+// Keys are read by physical position (e.code), so labels come from the player's own layout when the browser
+// can tell us (Chrome/Edge keyboard layout map: Dvorak, AZERTY, ...). Otherwise QWERTY names.
+let kbLayout = null;
+try { if (navigator.keyboard && navigator.keyboard.getLayoutMap) navigator.keyboard.getLayoutMap().then(m => { kbLayout = m; refreshGlyphs(); }).catch(() => {}); } catch (e) { /* not available */ }
+const KEY_NAMES = { Space: 'Space', Enter: 'Enter', Escape: 'Esc', Backspace: 'Backspace', ShiftLeft: 'Shift', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
+function K(code) {
+  if (KEY_NAMES[code]) return KEY_NAMES[code];
+  const l = kbLayout && kbLayout.get(code);
+  return (l || code.replace(/^Key|^Digit/, '')).toUpperCase();
+}
+const GLYPHS = {
+  ok: ['✕', () => 'Enter'], back: ['○', () => 'Esc'], start: ['✕', () => 'Enter'],
+  cross: ['✕', () => K('Space')], square: ['□', () => K('KeyC')], triangle: ['△', () => K('KeyR')], options: ['Options', () => 'Esc'],
+  l1: ['L1', () => K('KeyQ')], r1: ['R1', () => K('KeyE')], r2: ['R2', () => 'Shift'],
+  nav: ['Stick / D-pad', () => 'Arrow keys'], lr: ['◀ ▶', () => '← →'],
+  lstick: ['Left stick', () => `${K('KeyW')} ${K('KeyA')} ${K('KeyS')} ${K('KeyD')}`],
+  lstickUD: ['Left stick ↑ / ↓', () => `${K('KeyW')} / ${K('KeyS')}`], lstickLR: ['Left stick ← / →', () => `${K('KeyA')} / ${K('KeyD')}`],
+  rstick: ['Right stick', () => 'Arrow keys'],
+  throttle: ['✕ / □', () => `${K('Space')} / ${K('KeyC')}`], rudder: ['L1 / R1', () => `${K('KeyQ')} / ${K('KeyE')}`],
+  thrustVerb: ['Squeeze R2', () => 'Hold Shift'],
+  thrustDesc: ['Thrust, pressure-sensitive. About half pull hovers', () => 'Thrust: builds up while held, eases off when you let go. Feather it to hover'],
+  skyUD: ['Dive head-down (fast) / spread flat (slow)', () => `${K('KeyW')} tracks forward (fastest travel), Shift + ${K('KeyW')} dives head-down, ${K('KeyS')} spreads flat (slow)`],
+  canopyHow: ['Forward = dive (fast, steep), back = brake (slow, but you sink faster), sideways = steer. Pull back just before touchdown to flare',
+    () => `${K('KeyW')} = dive (Shift + ${K('KeyW')} steeper), ${K('KeyS')} = brake (slow, but you sink faster), ${K('KeyA')} / ${K('KeyD')} steer. Hold ${K('KeyS')} just before touchdown to flare`],
+  trackHow: ['Push the stick halfway forward', () => `Hold ${K('KeyW')}`], trackShort: ['stick halfway forward', () => `hold ${K('KeyW')}`],
+  diveHow: ['all the way', () => `Shift + ${K('KeyW')}`], backHow: ['pull back', () => `hold ${K('KeyS')}`],
+  flareHow: ['pulling back', () => `holding ${K('KeyS')}`],
+};
+function glyph(name) {
+  const g = GLYPHS[name]; if (!g) return name;
+  if (Input.device === 'kb') return g[1]();
+  if (Input.device === null && name === 'start') return '✕ / Enter';
+  return g[0];
+}
+const gl = name => `<span data-btn="${name}">${glyph(name)}</span>`;
+const fmtCtl = str => str.replace(/\{(\w+)\}/g, (m, n) => GLYPHS[n] ? gl(n) : m);
+// Rewrite every on-screen button name in place (device switched, or the layout map arrived).
+function refreshGlyphs() { for (const el of document.querySelectorAll('[data-btn]')) el.textContent = glyph(el.dataset.btn); }
+
 // ===================== GAME =====================
 const MODES = ['plane', 'glider', 'jetpack', 'skydive'];
+// Lesson controls: {tokens} turn into controller or keyboard names (see GLYPHS).
 const CONTROLS = {
-  plane: [['Left stick', 'Pitch (forward = nose down) and bank'], ['L1 / R1', 'Rudder left / right'], ['✕ / □', 'Throttle up / down (hold)'], ['Right stick', 'Look around'], ['Options', 'Pause']],
-  glider: [['Left stick', 'Pitch (forward = dive, faster) and bank to turn'], ['✕', 'Flare: slow down, use it to land'], ['Right stick', 'Look around'], ['Options', 'Pause']],
-  jetpack: [['R2', 'Thrust, pressure-sensitive. About half pull hovers'], ['Left stick ↑ / ↓', 'Lean forward / back. Push all the way to point the jets behind you and fly flat out'], ['Left stick ← / →', 'Turn'], ['Right stick', 'Look around'], ['Options', 'Pause']],
-  skydive: [['Left stick ↑ / ↓', 'Dive head-down (fast) / spread flat (slow)'], ['Left stick ← / →', 'Turn'], ['✕', 'Pull the parachute'], ['Under canopy', 'Forward = dive (fast, steep), back = brake (slow, but you sink faster), sideways = steer. Pull back just before touchdown to flare'], ['Right stick', 'Look around']],
-};
-const KEYS = {
-  plane: 'Keyboard: W/S pitch · A/D bank · Q/E rudder · Space/C throttle · arrows look · Esc pause',
-  glider: 'Keyboard: W/S pitch · A/D bank · Space flare · arrows look · Esc pause',
-  jetpack: 'Keyboard: hold Shift for thrust (ramps up) · W/S lean · A/D turn · arrows look · Esc pause',
-  skydive: 'Keyboard: W dive · S spread · A/D turn · Space chute · arrows look · Esc pause',
+  plane: [['{lstick}', 'Pitch (forward = nose down) and bank'], ['{rudder}', 'Rudder left / right'], ['{throttle}', 'Throttle up / down (hold)'], ['{rstick}', 'Look around'], ['{options}', 'Pause']],
+  glider: [['{lstick}', 'Pitch (forward = dive, faster) and bank to turn'], ['{cross}', 'Flare: slow down, use it to land'], ['{rstick}', 'Look around'], ['{options}', 'Pause']],
+  jetpack: [['{r2}', '{thrustDesc}'], ['{lstickUD}', 'Lean forward / back. Push all the way to point the jets behind you and fly flat out'], ['{lstickLR}', 'Turn'], ['{rstick}', 'Look around'], ['{options}', 'Pause']],
+  skydive: [['{lstickUD}', '{skyUD}'], ['{lstickLR}', 'Turn'], ['{cross}', 'Pull the parachute'], ['Under canopy', '{canopyHow}'], ['{rstick}', 'Look around'], ['{options}', 'Pause']],
 };
 
 let state = 'loading', mode = 'plane', course = null, sim = null, run = null, endTimer = 0, selIndex = 0, pauseIndex = 0, resultIndex = 0;
@@ -2183,7 +2228,7 @@ function renderCards() {
     const el = document.createElement('button'); el.className = 'card' + (i === selIndex ? ' sel' : ''); el.id = 'card-' + m;
     const cv = document.createElement('canvas'); drawSprite(cv, SPRITES[m]);
     el.append(cv);
-    el.insertAdjacentHTML('beforeend', `<div class="name">${c.name}</div><div class="desc">${c.desc}</div><div class="best">${b ? `Best ${b.score} pts${b.medal ? ' · ' + b.medal.toUpperCase() : ''}` : 'Not flown yet'}</div>`);
+    el.insertAdjacentHTML('beforeend', `<div class="name">${c.name}</div><div class="desc">${fmtCtl(c.desc)}</div><div class="best">${b ? `Best ${b.score} pts${b.medal ? ' · ' + b.medal.toUpperCase() : ''}` : 'Not flown yet'}</div>`);
     el.addEventListener('mouseenter', () => { selIndex = i; markCards(); });
     el.addEventListener('click', () => { selIndex = i; openBrief(MODES[i]); });
     wrap.append(el);
@@ -2196,11 +2241,10 @@ function openBrief(m) {
   const c = COURSES[m];
   document.getElementById('brief').innerHTML = `
     <h2>${c.name}</h2>
-    <p class="goal">${c.goal}</p>
-    <dl class="ctrl">${CONTROLS[m].map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl>
-    <p class="kb">${KEYS[m]}</p>
+    <p class="goal">${fmtCtl(c.goal)}</p>
+    <dl class="ctrl">${CONTROLS[m].map(([a, b]) => `<dt>${fmtCtl(a)}</dt><dd>${fmtCtl(b)}</dd>`).join('')}</dl>
     <p class="kb">Scoring: 10 per ring, +5 more for a perfect pass through the small white circle in the middle of a ring, up to 50 for the landing, up to 20 time bonus (par ${fmtTime(c.par)}).</p>
-    <div class="row"><button class="btn sel" id="b-go">✕ Fly</button><button class="btn" id="b-back">○ Back</button></div>`;
+    <div class="row"><button class="btn sel" id="b-go">${gl('ok')} Fly</button><button class="btn" id="b-back">${gl('back')} Back</button></div>`;
   document.getElementById('b-go').onclick = () => beginPlay();
   document.getElementById('b-back').onclick = () => goSelect();
   state = 'brief'; show('brief');
@@ -2212,6 +2256,7 @@ function startMode(m) {
   course = prepareCourse(m, W);
   W.thermals = course.thermals;
   sim = new SIMS[m](W);
+  Input.kbTrack = m === 'skydive';
   sim.reset(course.spawn);
   run = { rings: 0, perfect: 0, time: 0, crashed: false, landing: null, reason: '' };
   recStart();
@@ -2286,9 +2331,9 @@ function showResults() {
       <tr class="total"><td>Total ${missed ? `<span class="note">${missed} points left on the table</span>` : '<span class="note">a perfect run!</span>'}</td><td class="pts">${sc.total}<span class="of">/${sc.max}</span></td></tr>
     </table>
     <div class="medalrow">${medalHtml}${isBest ? '<span class="newbest">NEW BEST</span>' : ''}<span class="ladder">${ladder}</span></div>
-    ${newlyUnlocked.map(id => `<div class="unlocked">★ ${LEVELS[id].name.toUpperCase()} UNLOCKED ★<span>Switch levels with L1 / R1 on the lesson screen.</span></div>`).join('')}
+    ${newlyUnlocked.map(id => `<div class="unlocked">★ ${LEVELS[id].name.toUpperCase()} UNLOCKED ★<span>Switch levels with ${gl('l1')} / ${gl('r1')} on the lesson screen.</span></div>`).join('')}
     ${!run.crashed && nextMedal ? `<p class="nextmedal">${sc.cutoffs[nextMedal] - sc.total} more points for ${nextMedal}</p>` : ''}
-    <div class="row"><button class="btn sel" id="r-retry">✕ Try again</button><button class="btn" id="r-replay">△ Watch replay</button><button class="btn" id="r-menu">○ Choose lesson</button></div>`;
+    <div class="row"><button class="btn sel" id="r-retry">${gl('ok')} Try again</button><button class="btn" id="r-replay">${gl('triangle')} Watch replay</button><button class="btn" id="r-menu">${gl('back')} Choose lesson</button></div>`;
   resultIndex = 0;
   document.getElementById('r-retry').onclick = () => { startMode(mode); beginPlay(); };
   document.getElementById('r-menu').onclick = () => goSelect();
@@ -2530,7 +2575,7 @@ function drawReplayOverlay() {
   c.fillStyle = '#26304f'; c.fillRect(x0, y, w, 5 * u);
   c.fillStyle = '#ffc93c'; c.fillRect(x0, y, w * clamp(replay.t / replay.end, 0, 1), 5 * u);
   for (const e of rec.events) { c.fillStyle = e.kind === 'ring' ? (e.perfect ? '#ffffff' : '#ffc93c') : e.kind === 'crash' ? '#e8463a' : '#7ce07a'; c.fillRect(x0 + w * e.t / replay.end - 1.5 * u, y - 3 * u, 3 * u, 11 * u); }
-  txt('□ CAMERA   R1 FAST   L1 SLOW   ✕ / ○ EXIT', Wd / 2, H - bar / 2 + 6 * u, 11, '#a9b4d6', 'center');
+  txt(`${glyph('square')} CAMERA   ${glyph('r1')} FAST   ${glyph('l1')} SLOW   ${glyph('cross')} / ${glyph('back')} EXIT`.toUpperCase(), Wd / 2, H - bar / 2 + 6 * u, 11, '#a9b4d6', 'center');
   // brief event captions
   let my = H * 0.24;
   for (const m of msgs) { c.globalAlpha = clamp(m.t / 0.35, 0, 1); txt(m.text, Wd / 2, my, 28, m.color, 'center'); c.globalAlpha = 1; my += 40 * u; }
@@ -2691,7 +2736,7 @@ function drawHUD(dt) {
     txt('FT', gx + 200 * u, gy + 62 * u, 14, '#ffc93c', 'right');
     txt(sim.phase === 'free' ? `${Math.round(-hd.vs * MS_TO_MPH)} MPH DOWN` : `${Math.round(sim.vel.lenH() * MS_TO_MPH)} MPH FWD  ${Math.round(-hd.vs * MS_TO_MPH)} DOWN`, gx + 16 * u, gy + 98 * u, 12, '#a9b4d6');
     if (sim.phase !== 'free' && !sim.done && hd.agl < 9 && hd.agl > 0.5 && !(Input.s.ly > 0.5)) txt('PULL BACK TO FLARE', Wd / 2, H * 0.62, 22, Math.floor(performance.now() / 200) % 2 ? '#ffc93c' : '#fff4d6', 'center');
-    if (sim.phase === 'free' && hd.agl < 600) txt('PULL CHUTE  ✕', Wd / 2, H * 0.62, 24, Math.floor(performance.now() / 220) % 2 ? '#e8463a' : '#fff4d6', 'center');
+    if (sim.phase === 'free' && hd.agl < 600) txt(`PULL CHUTE  ${glyph('cross').toUpperCase()}`, Wd / 2, H * 0.62, 24, Math.floor(performance.now() / 220) % 2 ? '#e8463a' : '#fff4d6', 'center');
   }
 
   // objective marker: next ring, then the landing spot
