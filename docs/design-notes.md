@@ -23,6 +23,7 @@
 - Skydiving: drop at 1300 m, 4 freefall rings ~190 m apart vertically, canopy to bullseye.
 
 ## Change log
+- v10: replays. Every run is recorded at 30 Hz (vehicle state, stick inputs, ring/landing/crash events) and can be watched from the results screen (△ / R). Playback drives a ghost sim, so models, pilot animation, particles and sound replay as flown. An auto director cuts between chase, flyby, trackside, orbit and sky-cam shots, a ring cam waiting on the far side of upcoming rings, and a landing cam at the touchdown spot for the finish. Letterboxed overlay with a timeline marking rings (white = perfect), landing and crash. Controls: □ cycle camera (Auto/Chase/Flyby/Orbit/Sky), hold R1 3× fast, hold L1 slow-mo, ✕/○ exit.
 - v9: results screen explains the score: each line shows earned/possible with a ✓ or the points missed and why (missed rings, perfect passes, landing distance zones, hard-landing speed, runway softness/centerline, seconds over par), the total shows points left on the table, and medal cutoffs (gold 85%, silver 70%, bronze 55%) appear with how many more points the next medal needs. Rings now show the perfect-pass zone as a small white circle (35% of the radius).
 - v8: Pixels setting in the pause menu (◀ ▶): the 3D view renders at 180 (Chunky), 216, 270 (Classic, the original), 324, 360 (Crisp, new default), 432, 540 (Sharp) or 720 (Smooth) lines and is scaled up with hard pixel edges. Saved per browser. HUD always draws at 540 lines; particle and sparkle sizes scale with the setting.
 - v7: canopy rework. Default glide 40 mph forward / 12 mph down (was 25); stick forward dives to 63 mph (steep, risky to land); stick back brakes to 13 mph but sinks faster (19 mph). Slowing down quickly turns forward speed into lift: pulling back ~3–5 m up (5–8 m when diving in) gives a soft landing. Landing limits: soft under 5.5 m/s down and 30 mph forward; crash over 9 m/s down or 47 mph forward. HUD adds a ground ring where the glide will land (green over the bullseye), forward/sink readout, and a flare prompt. CI checks glide speed, brake behavior and the flare.
@@ -35,4 +36,5 @@
 - v1: first playable prototype with all four lessons.
 
 ## Ideas for next iterations
+- Save a best-run replay per lesson (ghost to race against).
 - Wind for glider/skydive, more levels, replay camera, invert-look option, rumble/adaptive triggers (Godot can reach DualSense features the browser can't).

@@ -9,7 +9,7 @@ A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog 
 | Jetpack | Weave through low rings over the lake on analog R2 thrust, land on the bullseye |
 | Skydiving | Freefall through the rings, pull the chute, steer onto the bullseye |
 
-Scoring: 10 per ring, +5 for a perfect center pass, up to 50 for the landing, up to 20 time bonus. Gold, silver and bronze medals. Best scores are saved in each player's browser.
+Scoring: 10 per ring, +5 for a perfect center pass, up to 50 for the landing, up to 20 time bonus. Gold, silver and bronze medals. Best scores are saved in each player's browser. After each run, △ (or R) plays a replay with automatic TV-style camera cuts.
 
 All sound and music is synthesized in the browser, so there are no audio files. Music and effects volume and the Pixels setting (how chunky the 3D view looks) live in the pause menu.
 

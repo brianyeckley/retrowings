@@ -1018,7 +1018,7 @@ function makeBiplane(body = '#d8362b', wing = '#f2c53d', trim = '#f6f1e4') {
 }
 
 function animateBiplane(dt, t, ud, live) {
-  const st = ud.st, inp = live && state === 'play' ? Input.s : {};
+  const st = ud.st, inp = live ? pilotInput() : {};
   const thr = live ? sim.throttle : 0.65, speed = live ? sim.vel.len() : 35;
   // propeller: solid blades at low revs, a soft blur disc as they spin up
   ud.prop.rotation.z = live ? sim.prop : ud.prop.rotation.z + 45 * dt;
@@ -1249,7 +1249,7 @@ const wave = (t, f, ph = 0) => Math.sin(t * f + ph);
 function standPose(j) { for (const n of ['spine', 'neck', 'hipL', 'hipR', 'knL', 'knR', 'anL', 'anR']) j[n].rotation.set(0, 0, 0); }
 
 function animateGlider(dt, t) {
-  const ud = vehicle.userData, { j, root } = ud.rig, st = ud.st, inp = state === 'play' ? Input.s : {};
+  const ud = vehicle.userData, { j, root } = ud.rig, st = ud.st, inp = pilotInput();
   const landed = sim.done && sim.done.type === 'landed';
   st.upright = damp(st.upright, (sim.flare || sim.agl < 6 || landed) ? 1 : 0, 3, dt);
   st.shift = damp(st.shift, sim.done ? 0 : (inp.lx || 0), 5, dt);     // weight-shift toward the turn
@@ -1286,7 +1286,7 @@ function animateGlider(dt, t) {
 }
 
 function animateJetpack(dt, t) {
-  const ud = vehicle.userData, { j } = ud.rig, st = ud.st, inp = state === 'play' ? Input.s : {};
+  const ud = vehicle.userData, { j } = ud.rig, st = ud.st, inp = pilotInput();
   const lean = clamp(sim.leanF / (80 * DEG), -0.4, 1), th = sim.thrust;
   st.lean = damp(st.lean, lean, 6, dt);
   const grounded = sim.onGround;
@@ -1311,7 +1311,7 @@ function animateJetpack(dt, t) {
 }
 
 function animateSkydiver(dt, t) {
-  const ud = vehicle.userData, { j, root } = ud.rig, inp = state === 'play' ? Input.s : {};
+  const ud = vehicle.userData, { j, root } = ud.rig, inp = pilotInput();
   const landed = sim.done && sim.done.type === 'landed';
   const free = sim.phase === 'free' && !sim.done;
   ud.chute.visible = sim.phase !== 'free';
@@ -1738,19 +1738,19 @@ const Sound = (() => {
     lastState = state;
     // music
     let want = 'title';
-    if (state === 'play' || state === 'pause') want = SONG_FOR[mode];
+    if (state === 'play' || state === 'pause' || state === 'replay') want = SONG_FOR[mode];
     else if (state === 'results' && clock - resultsAt < 3.5) want = null;
     playSong(want);
     set(musicFilter.frequency, state === 'pause' ? 650 : 18000, 0.15);
     set(musicBus.gain, vol.music * 0.55 * (state === 'pause' ? 0.7 : 1), 0.1);
     set(sfxBus.gain, vol.sfx, 0.05);
     // vehicle loops follow the active lesson
-    const active = (state === 'play' || state === 'pause') && sim;
+    const active = (state === 'play' || state === 'pause' || state === 'replay') && sim;
     if (active && (!loops || loops.mode !== mode || lastSim !== sim)) startLoops(mode);
     if (!active && loops) stopLoops();
     lastSim = sim;
     if (!loops) return;
-    const L = loops, live = state === 'play' && !sim.done, k = live ? 1 : 0;
+    const L = loops, live = (state === 'play' || state === 'replay') && !sim.done, k = live ? 1 : 0;
     const speed = sim.vel.len();
     let wind = Math.min(1, (speed / 55) ** 2) * 0.28;
     if (mode === 'skydive' && sim.phase === 'free') wind = Math.min(1, (speed / 60) ** 2) * 0.55;
@@ -1842,7 +1842,7 @@ const Input = {
     s.cross = b(0).pressed || key('Space', 'Enter');
     s.circle = b(1).pressed || key('Backspace');
     s.square = b(2).pressed || key('KeyC', 'ControlLeft');
-    s.triangle = b(3).pressed;
+    s.triangle = b(3).pressed || key('KeyR');
     s.options = b(9).pressed || key('Escape', 'KeyP');
     s.up = b(12).pressed || ly < -0.6 || key('ArrowUp');
     s.down = b(13).pressed || ly > 0.6 || key('ArrowDown');
@@ -1942,6 +1942,7 @@ function startMode(m) {
   sim = new SIMS[m](W);
   sim.reset(course.spawn);
   run = { rings: 0, perfect: 0, time: 0, crashed: false, landing: null, reason: '' };
+  recStart();
   endTimer = 0; msgs = [];
   buildCourseVisuals(course);
   for (const k in vehicleModels) vehicleModels[k].visible = k === m;
@@ -1964,12 +1965,14 @@ function finishRun() {
   const p = tv(sim.pos);
   if (d.type === 'crash') {
     const water = W.isWater(sim.pos.x, sim.pos.z);
+    recEvent({ kind: 'crash', water });
     emit(p, 120, water ? '#e6f4ff' : '#ff8a2a', water ? 9 : 14, 1.6, water ? 9 : 2);
     emit(p, 80, water ? '#7cc4f0' : '#5a5a5a', 6, 2.4, water ? 6 : -1.5);
     vehicle.visible = water ? false : vehicle.visible;
     flash(water ? 'SPLASH!' : 'CRASH!', d.reason, '#e8463a', 3);
     Sound.crash(water);
   } else {
+    recEvent({ kind: 'landed' });
     emit(p, 40, '#c9b07a', 4, 1.2, 1, 1, { x: 0, y: 1.5, z: 0 });
     flash('LANDED!', run.landing.note, '#7ce07a', 3);
     if (mode !== 'jetpack') Sound.landed();
@@ -2005,10 +2008,11 @@ function showResults() {
     </table>
     <div class="medalrow">${medalHtml}${isBest ? '<span class="newbest">NEW BEST</span>' : ''}<span class="ladder">${ladder}</span></div>
     ${!run.crashed && nextMedal ? `<p class="nextmedal">${sc.cutoffs[nextMedal] - sc.total} more points for ${nextMedal}</p>` : ''}
-    <div class="row"><button class="btn sel" id="r-retry">✕ Try again</button><button class="btn" id="r-menu">○ Choose lesson</button></div>`;
+    <div class="row"><button class="btn sel" id="r-retry">✕ Try again</button><button class="btn" id="r-replay">△ Watch replay</button><button class="btn" id="r-menu">○ Choose lesson</button></div>`;
   resultIndex = 0;
   document.getElementById('r-retry').onclick = () => { startMode(mode); beginPlay(); };
   document.getElementById('r-menu').onclick = () => goSelect();
+  document.getElementById('r-replay').onclick = () => startReplay();
   state = 'results'; show('results');
 }
 
@@ -2018,6 +2022,7 @@ let acc = 0;
 function tick(dt) {
   const prev = sim.pos.clone();
   sim.update(dt, Input.s);
+  recFrame(dt);
   if (!sim.done) {
     run.time += dt;
     course.rings.forEach((r, i) => {
@@ -2025,6 +2030,7 @@ function tick(dt) {
       const hit = ringCross(prev, sim.pos, r);
       if (hit) {
         r.done = true; r.perfect = hit.perfect; run.rings++; if (hit.perfect) run.perfect++;
+        recEvent({ kind: 'ring', i, perfect: hit.perfect });
         emit(tv(r.c), 60, hit.perfect ? '#ffffff' : '#ffc93c', r.r * 0.9, 1.0);
         Sound.ring(hit.perfect);
         flash(hit.perfect ? 'PERFECT!' : 'RING!', hit.perfect ? '+15' : '+10', hit.perfect ? '#ffffff' : '#ffc93c', 1.2);
@@ -2033,6 +2039,221 @@ function tick(dt) {
       }
     });
   } else if (!run.landing) finishRun();
+}
+
+// ===================== REPLAY =====================
+// Each run is recorded at 30 Hz (vehicle state, stick inputs, ring and landing events). Playback drives a
+// "ghost" that looks like a sim to the rest of the renderer, so models, animation and sound work unchanged.
+// (frame keys t, p, q, vel, done and i are reserved; vehicle fields must not reuse them)
+const REC_FIELDS = {
+  plane: ['throttle', 'prop', 'onGround', 'airborne'],
+  glider: ['flare', 'v', 'theta', 'phi', 'psi', 'lift'],
+  jetpack: ['leanF', 'leanR', 'thrust', 'fuel', 'onGround', 'airborne', 'psi'],
+  skydive: ['phase', 'open', 'alpha', 'bank', 'psi'],
+};
+const FEET_OF = () => ({ plane: PLANE.GEAR, glider: GLIDER_FEET, jetpack: JET.FEET, skydive: DIVER_FEET })[mode];
+let rec = null;          // the current run's recording
+let replay = null;       // playback state while watching
+let ghost = null, realSim = null;
+
+function recStart() { rec = { mode, frames: [], events: [], t: 0, n: 0, doneT: null, touchT: null }; }
+function recFrame(dt) {
+  if (!rec) return;
+  rec.t += dt;
+  if (rec.n++ % 4) return;   // 120 Hz ticks → 30 Hz frames
+  const f = { t: rec.t, p: [sim.pos.x, sim.pos.y, sim.pos.z], q: [sim.q.x, sim.q.y, sim.q.z, sim.q.w], vel: [sim.vel.x, sim.vel.y, sim.vel.z], done: sim.done };
+  const i = Input.s; f.i = [i.lx || 0, i.ly || 0, (i.l1 || 0) - (i.r1 || 0)];
+  for (const k of REC_FIELDS[mode]) f[k] = sim[k];
+  rec.frames.push(f);
+  if (sim.done && rec.doneT === null) rec.doneT = rec.t;
+  if (mode === 'plane' && sim.touch && rec.touchT === null) rec.touchT = rec.t;
+}
+const recEvent = e => { if (rec) rec.events.push({ t: rec.t, ...e }); };
+
+function makeGhost() {
+  const W0 = W, feet = FEET_OF();
+  return { pos: new V3(), q: new Quat(), vel: new V3(), done: null, inp: {}, W: W0,
+    get agl() { return this.pos.y - feet - W0.surfaceAt(this.pos.x, this.pos.z); } };
+}
+function ghostAt(t) {
+  const F = rec.frames;
+  let lo = 0, hi = F.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (F[m].t <= t) lo = m; else hi = m; }
+  const a = F[lo], b = F[hi], k = b.t > a.t ? clamp((t - a.t) / (b.t - a.t), 0, 1) : 0;
+  ghost.pos.set(lerp(a.p[0], b.p[0], k), lerp(a.p[1], b.p[1], k), lerp(a.p[2], b.p[2], k));
+  ghost.vel.set(lerp(a.vel[0], b.vel[0], k), lerp(a.vel[1], b.vel[1], k), lerp(a.vel[2], b.vel[2], k));
+  const qa = new THREE.Quaternion(...a.q), qb = new THREE.Quaternion(...b.q); qa.slerp(qb, k);
+  ghost.q.x = qa.x; ghost.q.y = qa.y; ghost.q.z = qa.z; ghost.q.w = qa.w;
+  for (const key of REC_FIELDS[rec.mode]) ghost[key] = typeof a[key] === 'number' ? lerp(a[key], b[key], k) : a[key];
+  ghost.done = a.done;
+  const rud = lerp(a.i[2], b.i[2], k);
+  ghost.inp = { lx: lerp(a.i[0], b.i[0], k), ly: lerp(a.i[1], b.i[1], k), l1: Math.max(0, rud), r1: Math.max(0, -rud), rx: 0, ry: 0 };
+}
+// Where the vehicle will be at time t (for placing cameras ahead of it).
+function frameAt(t) {
+  const F = rec.frames; let lo = 0, hi = F.length - 1;
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (F[m].t <= t) lo = m; else hi = m; }
+  return F[lo];
+}
+function posAt(t) { const f = frameAt(t); return V3T(f.p[0], f.p[1], f.p[2]); }
+// The moment that matters at the end: touchdown for the biplane, otherwise when the run ended.
+const finishT = () => rec.touchT ?? rec.doneT ?? replay.end;
+const pilotInput = () => state === 'play' ? Input.s : (state === 'replay' && ghost ? ghost.inp : {});
+
+function resetRingVisuals(doneFlags) {
+  course.rings.forEach((r, i) => {
+    r.done = doneFlags[i];
+    const m = ringMeshes[i]; m.scale.setScalar(1); m.visible = !r.done; m.material.opacity = 1;
+  });
+}
+
+function startReplay() {
+  if (!rec || rec.frames.length < 10 || rec.mode !== mode) return;
+  realSim = sim; ghost = makeGhost(); sim = ghost;
+  replay = { t: 0, end: rec.frames[rec.frames.length - 1].t, ev: 0, speed: 1, camMode: 'auto',
+    shot: null, shotEnd: 0, last: '', used: new Set(), finalDone: course.rings.map(r => r.done) };
+  resetRingVisuals(course.rings.map(() => false));
+  vehicle.visible = true;
+  if (dropPlane && mode === 'skydive') { dropPlane.visible = true; dropPlane.position.set(course.spawn.x, course.spawn.y + 6, course.spawn.z); }
+  for (let i = 0; i < PMAX; i++) { particles.life[i] = 0; particles.pos[i * 3 + 1] = -9999; }
+  ghostAt(0);
+  cam.init = false; msgs = [];
+  state = 'replay'; show(null);
+}
+function endReplay() {
+  if (!replay) return;
+  resetRingVisuals(replay.finalDone);
+  ghostAt(replay.end);
+  sim = realSim; ghost = null; replay = null;
+  if (W.isWater(sim.pos.x, sim.pos.z) && sim.done && sim.done.type === 'crash') vehicle.visible = false;
+  cam.init = false;
+  state = 'results'; show('results');
+}
+
+function replayEvent(e) {
+  if (e.kind === 'ring') {
+    const r = course.rings[e.i]; r.done = true;
+    emit(tv(r.c), 60, e.perfect ? '#ffffff' : '#ffc93c', r.r * 0.9, 1.0);
+    Sound.ring(e.perfect);
+    flash(e.perfect ? 'PERFECT!' : 'RING!', '', e.perfect ? '#ffffff' : '#ffc93c', 1.0);
+  } else if (e.kind === 'crash') {
+    const p = tv(ghost.pos);
+    emit(p, 120, e.water ? '#e6f4ff' : '#ff8a2a', e.water ? 9 : 14, 1.6, e.water ? 9 : 2);
+    emit(p, 80, e.water ? '#7cc4f0' : '#5a5a5a', 6, 2.4, e.water ? 6 : -1.5);
+    if (e.water) vehicle.visible = false;
+    Sound.crash(e.water);
+    flash(e.water ? 'SPLASH!' : 'CRASH!', '', '#e8463a', 2);
+  } else if (e.kind === 'landed') {
+    emit(tv(ghost.pos), 40, '#c9b07a', 4, 1.2, 1, 1, { x: 0, y: 1.5, z: 0 });
+    if (mode !== 'jetpack') Sound.landed();
+    flash('LANDED!', '', '#7ce07a', 2);
+  }
+}
+
+function updateReplay(dt) {
+  const p = Input.p, s = Input.s;
+  if (p.cross || p.circle || p.options || p.triangle) { Sound.ui('back'); endReplay(); return; }
+  if (p.square) {
+    const modes = ['auto', 'chase', 'flyby', 'orbit', 'high'];
+    replay.camMode = modes[(modes.indexOf(replay.camMode) + 1) % modes.length];
+    replay.shot = null; Sound.ui('move');
+  }
+  replay.speed = s.r1 ? 3 : s.l1 ? 0.35 : 1;
+  const rdt = dt * replay.speed;
+  replay.t += rdt;
+  let fired = 0;
+  while (replay.ev < rec.events.length && rec.events[replay.ev].t <= replay.t) { replayEvent(rec.events[replay.ev++]); fired++; }
+  if (fired > 1) msgs = msgs.slice(-1);   // fast-forward can pass several events at once: keep one caption
+  if (replay.t >= replay.end) { endReplay(); return; }
+  ghostAt(replay.t);
+  if (dropPlane && dropPlane.visible && mode === 'skydive') {
+    const f = fwdOfYaw(course.spawn.yaw);
+    dropPlane.position.x += f.x * 40 * rdt; dropPlane.position.z += f.z * 40 * rdt; animateBiplane(rdt, animClock, dropPlane.userData, false);
+  }
+  msgs.forEach(m => m.t -= dt); msgs = msgs.filter(m => m.t > 0);
+}
+
+// ---------- the camera director ----------
+const SHOT_NAMES = { chase: 'CHASE', flyby: 'FLYBY', trackside: 'TRACKSIDE', orbit: 'ORBIT', high: 'SKY CAM', ring: 'RING CAM', landing: 'LANDING CAM', auto: 'AUTO' };
+function heading() { const h = V3T(ghost.vel.x, 0, ghost.vel.z); if (h.lengthSq() < 0.5) { const f = ghost.q.rot(F0); h.set(f.x, 0, f.z); } return h.normalize(); }
+function chooseShot() {
+  const t = replay.t, R = replay;
+  if (R.camMode !== 'auto') return { kind: R.camMode, end: Infinity };
+  // the finish: a camera waiting at the landing spot
+  const finish = finishT();
+  if (t > finish - 6 && !R.used.has('landing')) { R.used.add('landing'); return { kind: 'landing', end: Infinity }; }
+  // an upcoming ring: wait for the pass on the far side
+  const ev = rec.events.find(e => e.kind === 'ring' && e.t - t > 0.9 && e.t - t < 3.2 && !R.used.has('ring' + e.i));
+  if (ev && Math.random() < 0.75) { R.used.add('ring' + ev.i); return { kind: 'ring', ring: course.rings[ev.i], evT: ev.t, end: ev.t + 1.3 }; }
+  const pool = ['chase', 'flyby', 'trackside', 'orbit', 'high'].filter(k => k !== R.last);
+  const kind = t < 0.1 ? (mode === 'skydive' ? 'orbit' : 'trackside') : pool[Math.floor(Math.random() * pool.length)];
+  return { kind, end: t + 3.5 + Math.random() * 2.5 };
+}
+function setupShot(sh) {
+  const P = tv(ghost.pos), H = tv(heading()), Rt = V3T(-H.z, 0, H.x), side = Math.random() < 0.5 ? -1 : 1;
+  sh.side = side; sh.start = replay.t;
+  if (sh.kind === 'trackside') {
+    const F = tv(posAt(Math.min(replay.end, replay.t + 2.6)));
+    sh.pos = F.clone().add(Rt.multiplyScalar(side * 16)).add(V3T(0, 3, 0));
+    sh.fov = 38;
+  } else if (sh.kind === 'ring') {
+    const r = sh.ring, n = tv(r.n), e = rec.frames[Math.min(rec.frames.length - 1, Math.round(sh.evT * 30))];
+    const dir = (e.vel[0] * n.x + e.vel[1] * n.y + e.vel[2] * n.z) >= 0 ? 1 : -1;
+    const across = Math.abs(n.y) > 0.9 ? V3T(1, 0, 0) : V3T(-n.z, 0, n.x);
+    sh.pos = tv(r.c).add(n.multiplyScalar(dir * r.r * 2.4)).add(across.multiplyScalar(side * r.r * 0.7)).add(V3T(0, Math.abs(r.n.y) > 0.9 ? 0 : r.r * 0.35, 0));
+    sh.fov = 50;
+  } else if (sh.kind === 'landing') {
+    const spot = posAt(finishT()).setY(0);
+    const from = spot.clone().sub(P.clone().setY(0));
+    const across = from.lengthSq() > 1 ? V3T(-from.z, 0, from.x).normalize() : V3T(1, 0, 0);
+    sh.pos = spot.add(across.multiplyScalar(side * (mode === 'plane' ? 26 : 13))).add(from.lengthSq() > 1 ? from.normalize().multiplyScalar(mode === 'plane' ? 20 : 6) : V3T(0, 0, 0));
+    sh.pos.y = W.surfaceAt(sh.pos.x, sh.pos.z) + (mode === 'plane' ? 2.2 : 1.6);
+    sh.fov = 44;
+  } else if (sh.kind === 'orbit') { sh.a0 = Math.random() * Math.PI * 2; sh.fov = 50; }
+  else if (sh.kind === 'high') sh.fov = 55;
+  else if (sh.kind === 'flyby') sh.fov = 48;
+  replay.last = sh.kind;
+}
+function replayCamera(dt) {
+  const R = replay;
+  if (!R.shot || R.t >= R.shot.end || (R.shot.kind !== 'landing' && R.t > finishT() - 6 && !R.used.has('landing') && R.camMode === 'auto')) {
+    R.shot = chooseShot(); setupShot(R.shot); cam.init = false;
+  }
+  const sh = R.shot, P = tv(ghost.pos), H = tv(heading()), Rt = V3T(-H.z, 0, H.x);
+  let pos = null, fov = sh.fov || 55;
+  if (sh.kind === 'chase') { updateCamera(dt); return; }
+  if (sh.kind === 'trackside' || sh.kind === 'ring' || sh.kind === 'landing') pos = sh.pos.clone();
+  else if (sh.kind === 'flyby') pos = P.clone().add(Rt.multiplyScalar(sh.side * 9)).add(H.clone().multiplyScalar(4)).add(V3T(0, 1.5, 0));
+  else if (sh.kind === 'orbit') { const a = sh.a0 + (R.t - sh.start) * 0.35; pos = P.clone().add(V3T(Math.cos(a) * 15, 4.5, Math.sin(a) * 15)); }
+  else if (sh.kind === 'high') pos = P.clone().add(H.clone().multiplyScalar(-26)).add(V3T(0, 30, 0));
+  pos.y = Math.max(pos.y, W.surfaceAt(pos.x, pos.z) + 1.2);
+  const moving = sh.kind === 'flyby' || sh.kind === 'orbit' || sh.kind === 'high';
+  if (!cam.init) { cam.pos.copy(pos); cam.look.copy(P); cam.init = true; }
+  else { cam.pos.lerp(pos, moving ? 1 - Math.exp(-6 * dt) : 1); cam.look.lerp(P, 1 - Math.exp(-12 * dt)); }
+  camera.position.copy(cam.pos); camera.lookAt(cam.look);
+  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
+}
+
+function drawReplayOverlay() {
+  const c = hctx, Wd = hudCanvas.width, H = hudCanvas.height, u = H / 540;
+  const txt = (s, x, y, size, color = '#fff4d6', align = 'left') => { c.font = hudFont(size * u); c.textAlign = align; c.textBaseline = 'middle'; c.fillStyle = '#141c38'; c.fillText(s, x + 2 * u, y + 2 * u); c.fillStyle = color; c.fillText(s, x, y); };
+  const bar = Math.round(46 * u);
+  c.fillStyle = '#0b0f1f'; c.fillRect(0, 0, Wd, bar); c.fillRect(0, H - bar, Wd, bar);
+  if (Math.floor(performance.now() / 500) % 2) { c.fillStyle = '#e8463a'; c.beginPath(); c.arc(28 * u, bar / 2, 7 * u, 0, Math.PI * 2); c.fill(); }
+  txt('REPLAY', 44 * u, bar / 2, 18, '#fff4d6');
+  txt(`${course.def.short} · ${fmtTime(Math.min(replay.t, rec.doneT ?? replay.t))}`, Wd / 2, bar / 2, 14, '#ffc93c', 'center');
+  const camName = replay.camMode === 'auto' ? `AUTO · ${SHOT_NAMES[replay.shot ? replay.shot.kind : 'chase']}` : SHOT_NAMES[replay.camMode];
+  txt(`CAM ${camName}`, Wd - 20 * u, bar / 2, 13, '#a9b4d6', 'right');
+  if (replay.speed !== 1) txt(replay.speed > 1 ? '▶▶ 3×' : '◀ SLOW', Wd - 20 * u, bar + 20 * u, 14, '#ffc93c', 'right');
+  // progress bar with ring and finish ticks
+  const x0 = 20 * u, x1 = Wd - 20 * u, y = H - bar + 12 * u, w = x1 - x0;
+  c.fillStyle = '#26304f'; c.fillRect(x0, y, w, 5 * u);
+  c.fillStyle = '#ffc93c'; c.fillRect(x0, y, w * clamp(replay.t / replay.end, 0, 1), 5 * u);
+  for (const e of rec.events) { c.fillStyle = e.kind === 'ring' ? (e.perfect ? '#ffffff' : '#ffc93c') : e.kind === 'crash' ? '#e8463a' : '#7ce07a'; c.fillRect(x0 + w * e.t / replay.end - 1.5 * u, y - 3 * u, 3 * u, 11 * u); }
+  txt('□ CAMERA   R1 FAST   L1 SLOW   ✕ / ○ EXIT', Wd / 2, H - bar / 2 + 6 * u, 11, '#a9b4d6', 'center');
+  // brief event captions
+  let my = H * 0.24;
+  for (const m of msgs) { c.globalAlpha = clamp(m.t / 0.35, 0, 1); txt(m.text, Wd / 2, my, 28, m.color, 'center'); c.globalAlpha = 1; my += 40 * u; }
 }
 
 // ---------- vehicle + camera sync ----------
@@ -2123,6 +2344,7 @@ function hudFont(px) { return `${Math.round(px)}px Silkscreen, "Courier New", mo
 function drawHUD(dt) {
   const c = hctx, Wd = hudCanvas.width, H = hudCanvas.height, u = H / 540;
   c.clearRect(0, 0, Wd, H);
+  if (state === 'replay' && replay) { drawReplayOverlay(); return; }
   if (!(state === 'play' || state === 'pause')) return;
   c.textBaseline = 'top';
   const panel = (x, y, w, h) => { c.fillStyle = 'rgba(20,28,56,0.82)'; c.fillRect(x, y, w, h); c.strokeStyle = '#ffc93c'; c.lineWidth = 3 * u; c.strokeRect(x + 1.5 * u, y + 1.5 * u, w - 3 * u, h - 3 * u); };
@@ -2296,6 +2518,7 @@ function menuInput() {
   } else if (state === 'results') {
     if (p.cross) { startMode(mode); beginPlay(); }
     if (p.circle) { Sound.ui('back'); goSelect(); }
+    if (p.triangle) { Sound.ui('ok'); startReplay(); }
   }
 }
 function renderVolume() {
@@ -2326,7 +2549,8 @@ function frame(now) {
     acc += dt;
     while (acc >= FIXED) { tick(FIXED); acc -= FIXED; }
     if (sim.done) { endTimer += dt; if (endTimer > 3.0) showResults(); }
-  } else { acc = 0; menuInput(); }
+  } else if (state === 'replay') { acc = 0; updateReplay(dt); }
+  else { acc = 0; menuInput(); }
   // drop plane flies on
   if (dropPlane && dropPlane.visible && state === 'play') {
     const f = fwdOfYaw(course.spawn.yaw);
@@ -2348,7 +2572,8 @@ function frame(now) {
   }
   updateParticles(dt);
   syncVehicle(dt);
-  if (state === 'play' || state === 'pause' || state === 'results') {
+  if (state === 'replay' && replay) replayCamera(dt);
+  else if (state === 'play' || state === 'pause' || state === 'results') {
     if (state !== 'results' || cam.init) updateCamera(state === 'pause' ? 0.0001 : dt);
   } else attractCamera(dt);
   skyDome.position.copy(camera.position);
