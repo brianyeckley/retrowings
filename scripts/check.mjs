@@ -21,9 +21,25 @@ catch (e) { check(false, 'game script parses\n' + e.stderr); }
 
 // 2. Simulation
 const sim = html.split('// ======== SIM START ========')[1].split('// ======== SIM END ========')[0];
-const S = new Function(sim + '; return { createWorld, prepareCourse, SIMS, ringCross, landingScore, computeScore, COURSES };')();
-const W = S.createWorld();
-check(W.trees.length > 5000, `world builds (${W.trees.length} trees)`);
+const S = new Function(sim + '; return { createWorld, prepareCourse, SIMS, ringCross, landingScore, computeScore, LEVELS, LEVEL_ORDER };')();
+
+// every level: the world builds and each course sits sensibly on its terrain
+for (const id of S.LEVEL_ORDER) {
+  const Wl = S.createWorld(id);
+  check(Wl.trees.length > 1000, `${id}: world builds (${Wl.trees.length} plants)`);
+  for (const key of Object.keys(S.LEVELS[id].courses)) {
+    const c = S.prepareCourse(key, Wl);
+    check(!Wl.isWater(c.target.x, c.target.z), `${id} ${key}: landing spot is on dry land`);
+    if (c.spawn.ground) check(!Wl.isWater(c.spawn.x, c.spawn.z), `${id} ${key}: start is on dry land`);
+    check(c.rings.every(r => r.c.y - Wl.surfaceAt(r.c.x, r.c.z) > r.r * 0.9), `${id} ${key}: every ring clears the ground`);
+    if (c.landing.type === 'target') {
+      const g = Wl.groundAt(c.target.x, c.target.z), flat = [[1, 0], [-1, 0], [0, 1], [0, -1]].every(([dx, dz]) => Math.abs(Wl.groundAt(c.target.x + dx * c.landing.r, c.target.z + dz * c.landing.r) - g) < 1.5);
+      check(flat, `${id} ${key}: the bullseye is flat`);
+    }
+  }
+}
+// the physics checks below run on the Heartland
+const W = S.createWorld('heartland');
 
 const neutral = () => ({ lx: 0, ly: 0, rx: 0, ry: 0, l1: 0, r1: 0, r2: 0, cross: false, square: false, crossP: false });
 const run = (key, ctl, T, spawn, thermals = true, stop = null) => {
@@ -34,12 +50,6 @@ const run = (key, ctl, T, spawn, thermals = true, stop = null) => {
   return { s, c };
 };
 
-for (const key of Object.keys(S.COURSES)) {
-  const c = S.prepareCourse(key, W);
-  check(!W.isWater(c.target.x, c.target.z), `${key}: landing spot is on dry land`);
-  if (c.spawn.ground) check(!W.isWater(c.spawn.x, c.spawn.z), `${key}: start is on dry land`);
-  check(c.rings.every(r => r.c.y - W.surfaceAt(r.c.x, r.c.z) > r.r * 0.9), `${key}: every ring clears the ground`);
-}
 
 { const { s } = run('plane', (t) => ({ cross: t < 3, ly: t > 6 && t < 7 ? 0.5 : 0 }), 20);
   check(s.airborne && !s.done, `plane takes off at full throttle with a gentle pull (alt ${s.agl.toFixed(0)} m)`); }
@@ -52,7 +62,7 @@ for (const key of Object.keys(S.COURSES)) {
     let t = 0; const { s } = run('glider', (tt) => { t = tt; return { lx: 0.55 }; }, 120, () => ({ x: th.x + 60, z: th.z, y: th.base + 80, yaw: 0, speed: 14 }), true, s => s.pos.y - th.base - 80 >= climb);
     check(s.pos.y - th.base - 80 >= climb && t < 40, `thermal ${k + 1}: climbs ${climb} m in ${t.toFixed(0)} s (limit 40 s)`);
   }
-  // easy-course rule: rings sit in calm air, outside every thermal's lift and inflow
+  // easy-course rule (Heartland only): rings sit in calm air, outside every thermal's lift and inflow
   for (const [i, r] of c0.rings.entries()) {
     W.thermals = c0.thermals; const inflow = W.thermalInflow(r.c);
     check(W.thermalLift(r.c) === 0 && inflow.x === 0 && inflow.z === 0, `glider ring ${i + 1} is in calm air (${Math.min(...c0.thermals.map(t => Math.hypot(t.x - r.c.x, t.z - r.c.z))).toFixed(0)} m from the nearest thermal)`);

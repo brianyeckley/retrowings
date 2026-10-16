@@ -1,6 +1,6 @@
 # Retrowings
 
-A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog controls, built for a PS5 DualSense on PC. One map of American countryside, four lessons:
+A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog controls, built for a PS5 DualSense on PC. Two levels, each with four lessons: Heartland (American countryside) and Red Rock Canyon (desert canyon, unlocked by earning silver or better in all four Heartland lessons). Each level has its own courses, music and vehicle skins. The Heartland lessons:
 
 | Lesson | Goal |
 | --- | --- |
@@ -9,7 +9,7 @@ A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog 
 | Jetpack | Weave through low rings over the lake on analog R2 thrust, land on the bullseye |
 | Skydiving | Freefall through the rings, pull the chute, steer onto the bullseye |
 
-Scoring: 10 per ring, +5 for a perfect center pass, up to 50 for the landing, up to 20 time bonus. Gold, silver and bronze medals. Best scores are saved in each player's browser. After each run, △ (or R) plays a replay with automatic TV-style camera cuts.
+Scoring: 10 per ring, +5 for a perfect center pass, up to 50 for the landing, up to 20 time bonus. Gold, silver and bronze medals. Best scores are saved in each player's browser. On the lesson screen, L1 / R1 (Q / E) switch levels; add `#unlockall` to the URL to try every level without earning it. After each run, △ (or R) plays a replay with automatic TV-style camera cuts.
 
 All sound and music is synthesized in the browser, so there are no audio files. Music and effects volume and the Pixels setting (how chunky the 3D view looks) live in the pause menu.
 

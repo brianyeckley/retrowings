@@ -34,7 +34,7 @@ body { background: var(--ink); color: var(--cream); font-family: var(--font-body
 #app.playing { cursor: none; }
 
 .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding-inline: 16px; padding-block: 24px; overflow-y: auto; }
-.screen[hidden] { display: none !important; }
+[hidden] { display: none !important; }
 .panel { background: var(--panel); border: 4px solid var(--gold); box-shadow: 0 0 0 4px var(--ink), 8px 8px 0 4px rgba(0,0,0,.35); padding: 20px 24px; max-width: 760px; width: 100%; }
 
 .logo { font-family: var(--font-display); font-weight: 700; font-size: clamp(36px, 9vw, 104px); line-height: .9; letter-spacing: .02em; color: var(--gold); text-shadow: 4px 4px 0 var(--red), 8px 8px 0 var(--ink); text-align: center; text-wrap: balance; }
@@ -52,6 +52,19 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
 .card .name { font-family: var(--font-display); font-size: 17px; color: var(--gold); letter-spacing: .04em; }
 .card .desc { font-size: 15px; line-height: 1.3; color: var(--cream); }
 .card .best { font-family: var(--font-display); font-size: 12px; color: var(--muted); letter-spacing: .06em; margin-top: auto; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.tab { font-family: var(--font-display); font-size: 13px; letter-spacing: .06em; background: var(--panel); color: var(--cream); border: 3px solid var(--ink); padding: 8px 14px; cursor: pointer; }
+.tab.sel { border-color: var(--gold); color: var(--gold); }
+.tab.locked { color: var(--muted); }
+.lockpanel { max-width: 560px; font-size: 16px; line-height: 1.4; }
+.lockpanel .lockhead { font-family: var(--font-display); color: var(--gold); font-size: 18px; margin: 0 0 6px; }
+.lockpanel p { margin: 0 0 10px; }
+.lockl { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lockl li { display: flex; justify-content: space-between; gap: 12px; border-bottom: 2px dashed rgba(169,180,214,.35); padding-bottom: 4px; }
+.lockl li.ok { color: #7ce07a; }
+.lockl li span { font-family: var(--font-display); font-size: 12px; color: var(--muted); }
+.unlocked { margin-top: 12px; background: var(--gold); color: var(--ink); font-family: var(--font-display); font-size: 16px; letter-spacing: .08em; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
+.unlocked span { font-family: var(--font-body); font-size: 14px; letter-spacing: 0; }
 .hint { font-family: var(--font-display); font-size: 13px; letter-spacing: .08em; color: var(--cream); text-shadow: 2px 2px 0 var(--ink); text-align: center; }
 
 .brief h2 { text-align: left; }
@@ -106,10 +119,13 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
   </div>
 
   <div id="screen-select" class="screen" hidden>
-    <h2>Choose your lesson</h2>
+    <div class="tabs" id="tabs"></div>
+    <h2 id="select-title">Choose your lesson</h2>
     <div class="cards" id="cards"></div>
-    <div class="hint">Stick / D-pad to choose · ✕ fly · ○ back</div>
+    <div class="panel lockpanel" id="lockpanel" hidden></div>
+    <div class="hint">Stick / D-pad to choose · ✕ fly · ○ back · L1 / R1 change level</div>
   </div>
+  <div id="screen-travel" class="screen" hidden><div class="tagline" id="travel-msg">Flying to the canyon…</div></div>
 
   <div id="screen-brief" class="screen" hidden>
     <div class="panel brief" id="brief"></div>
@@ -215,7 +231,7 @@ function segDist(px, pz, ax, az, bx, bz) {
   const t = l2 > 0 ? clamp(((px - ax) * dx + (pz - az) * dz) / l2, 0, 1) : 0;
   return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
 }
-function baseHeight(x, z) {
+function heartlandHeight(x, z) {
   let h = 26 + 40 * fbm(x / 1100, z / 1100, 4, 1) + 10 * fbm(x / 240, z / 240, 3, 5);
   const m = smoothstep(-800, -2300, z);                       // mountains to the north
   if (m > 0) h += m * (160 + 300 * Math.max(0, 0.15 + fbm(x / 700, z / 700, 5, 9)));
@@ -234,10 +250,19 @@ function baseHeight(x, z) {
 }
 const forestN = (x, z) => fbm(x / 650 + 40, z / 650 - 20, 4, 21);
 const isField = (x, z) => forestN(x, z) < -0.1 && z > -900 && x > -1300;
+// Heartland vegetation: forests where the forest noise is high, a few lone trees elsewhere, none in fields.
+function heartlandTree(jx, jz, h, k, shade) {
+  const f = forestN(jx, jz);
+  const p = (f > 0.04 ? smoothstep(0.04, 0.26, f) * 0.85 : 0) + 0.012;
+  if (shade > p) return null;
+  if (h < 2.5 || h > 400 || isField(jx, jz)) return null;
+  const pine = h > 140 || k > 0.6;
+  return { kind: pine ? 'pine' : 'round', h: pine ? 10 + k * 8 : 7 + k * 5, r: pine ? 3 + k * 1.5 : 3.5 + k * 1.8 };
+}
 
 // ---------- courses (pure data: ports straight to Godot Resources / JSON) ----------
 // Ring entries are [x, z, heightAboveGround]. Ring facing is derived from the path.
-const COURSES = {
+const COURSES_HEARTLAND = {
   plane: {
     name: 'Biplane', short: 'BIPLANE', par: 150, ringR: 14,
     desc: 'Take off, thread the rings, land back on the runway.',
@@ -276,10 +301,99 @@ const COURSES = {
   },
 };
 
+// ---------- Red Rock Canyon terrain ----------
+// Desert floor, terraced mesas with sheer walls, standalone buttes, and a winding canyon cut down to a river.
+const canyonX = z => -380 + 300 * Math.sin(z / 760 + 0.4) + 110 * Math.sin(z / 270 + 1.3);
+const BUTTES = [[620, -260, 46, 205], [1000, 260, 36, 170], [650, 1300, 52, 150], [-1250, 900, 44, 220], [1350, -720, 50, 190], [180, -1350, 40, 175], [1500, 1000, 38, 160]];
+const terrace = (h, step) => { const t = h / step, f = Math.floor(t); return (f + smoothstep(0.62, 1, t - f)) * step; };
+function canyonHeight(x, z) {
+  // desert floor: gentle swells around 15 m
+  let h = 15 + 7 * fbm(x / 520, z / 520, 3, 31) + 2 * fbm(x / 90, z / 90, 2, 33);
+  // mesas: a plateau mask with crisp edges, mostly west and north; open desert to the south-east
+  const region = 0.05 - 0.00009 * x - 0.00007 * z;   // more mesa to the north-west, open desert to the south-east
+  const m = fbm(x / 900 + 7, z / 900 - 3, 4, 51) + region;
+  const mask = smoothstep(0.12, 0.17, m);
+  if (mask > 0) {
+    const top = 165 + 45 * fbm(x / 900, z / 900, 3, 57);
+    h = Math.max(h, terrace(top * mask, 26));
+  }
+  // buttes: steep stone columns with a terraced cap
+  for (const [bx, bz, r, H] of BUTTES) {
+    const d = Math.hypot(x - bx, z - bz);
+    if (d < r + 20) h = Math.max(h, terrace(H * smoothstep(r + 14, r - 6, d), 24));
+  }
+  // the canyon: stepped walls down to a river channel
+  const dc = Math.abs(x - canyonX(z));
+  if (dc < 175) {
+    const f = smoothstep(22, 175, dc);
+    const stepped = (Math.floor(f * 4) + smoothstep(0.55, 1, f * 4 - Math.floor(f * 4))) / 4;
+    h = Math.min(h, lerp(3, Math.max(h, 30), stepped));            // dry sandy canyon floor at 3 m
+    if (dc < 20) h = Math.min(h, lerp(-4, 3, smoothstep(8, 20, dc)));  // narrow river channel
+  }
+  return h;
+}
+// Desert vegetation: junipers on mesa tops and slopes, saguaros and sagebrush on the floor.
+function canyonTree(jx, jz, h, k, roll) {
+  if (h < 1.5 || roll > 0.035 + 0.05 * smoothstep(0.1, 0.5, fbm(jx / 300, jz / 300, 2, 61))) return null;
+  if (h > 120) return { kind: 'juniper', h: 4 + k * 3, r: 2.4 + k * 1.2 };
+  if (k > 0.72) return { kind: 'cactus', h: 5 + k * 3, r: 0.9 };
+  if (k > 0.35) return { kind: 'sage', h: 1.3 + k, r: 1.4 + k * 0.8 };
+  return { kind: 'juniper', h: 3.5 + k * 3, r: 2.2 + k };
+}
+
+const COURSES_CANYON = {
+  plane: {
+    name: 'Biplane', short: 'BIPLANE', par: 170, ringR: 14,
+    desc: 'Thread the canyon, climb over the mesa, top the butte.',
+    goal: 'Take off north from the desert strip, drop into the canyon and follow it between the walls, then climb out over the mesa, fly over the top of the butte and come back south to land near the orange markers.',
+    spawn: { x: 350, z: 1590, ground: true, yaw: 0 },
+    rings: [[260, 800, 45], [-60, 300, 40], [-358, -300, 50], [-635, -700, 60], [-680, -1100, 70], [-604, -1400, 165], [250, -720, 50], [620, -260, 40], [350, 450, 50]],
+    landing: { type: 'runway', ax: 350, az: 1620, bx: 350, bz: 1000, w: 30, markerZ: 1180 },
+  },
+  glider: {
+    name: 'Hang Glider', short: 'HANG GLIDER', par: 290, ringR: 16,
+    desc: 'Dive into the canyon, thermal out, soar over the butte.',
+    goal: 'Launch off the west mesa and dive into the canyon for ring 1. A thermal rises from the canyon floor: circle inside the walls to climb out, glide over the east mesa, use the thermal on the mesa top to reach the ring over the butte, then dive low across the desert to the bullseye. Flare with ✕ just before touchdown.',
+    spawn: { x: -700, z: -260, agl: 80, speed: 14 },
+    rings: [[-582, -600, 100], [-250, -1100, 130], [620, -260, 60], [200, 450, 40]],
+    thermals: [{ x: -676, z: -820, r: 60, lift: 13, top: 400 }, { x: 200, z: -650, r: 70, lift: 12, top: 300 }],
+    landing: { type: 'target', x: 120, z: 760, r: 20 },
+  },
+  jetpack: {
+    name: 'Jetpack', short: 'JETPACK', par: 110, ringR: 7,
+    desc: 'Spiral up around the butte and land on its summit.',
+    goal: 'Lift off the pad and spiral up around the butte through the rings, each one higher than the last, then set down on the bullseye on the summit. Watch your fuel.',
+    spawn: { x: 520, z: 1420, ground: true },
+    rings: [[570, 1350, 20], [650, 1395, 45], [740, 1315, 70], [715, 1220, 95], [600, 1215, 120], [565, 1290, 150]],
+    landing: { type: 'target', x: 650, z: 1300, r: 10, flat: { r: 14, blend: 6 } },
+  },
+  skydive: {
+    name: 'Skydiving', short: 'SKYDIVING', par: 120, ringR: 20,
+    desc: 'Track over the canyon through the rings, land on the mesa.',
+    goal: 'Jump over the canyon and track hard (stick halfway forward) to reach each ring as you fall. Pull the chute with ✕, then steer onto the bullseye on top of the east mesa. Flare by pulling back just before touchdown.',
+    spawn: { x: -720, z: -260, agl: 1450, speed: 35 },
+    rings: [[-644, -339, 1252], [-574, -411, 1093], [-505, -483, 1020], [-435, -555, 736]],
+    vertical: true,
+    landing: { type: 'target', x: -150, z: -850, r: 18 },
+  },
+};
+
+// ---------- levels ----------
+// A level is terrain + vegetation + four courses. createWorld(id) makes it current.
+const LEVELS = {
+  heartland: { id: 'heartland', name: 'Heartland', base: heartlandHeight, tree: heartlandTree, courses: COURSES_HEARTLAND },
+  canyon: { id: 'canyon', name: 'Red Rock Canyon', base: canyonHeight, tree: canyonTree, courses: COURSES_CANYON,
+    unlock: { level: 'heartland', medal: 'silver' } },   // silver or better in every lesson of the previous level
+};
+const LEVEL_ORDER = ['heartland', 'canyon'];
+let LEVEL = LEVELS.heartland, COURSES = LEVEL.courses;
+const baseHeight = (x, z) => LEVEL.base(x, z);
+
 // Flattened zones (runway, pad, targets) feed the terrain function.
 const ZONES = [];
 const NO_TREES = [];
-(function buildZones() {
+function buildZones() {
+  ZONES.length = 0; NO_TREES.length = 0;
   for (const key in COURSES) {
     const c = COURSES[key], L = c.landing;
     if (L.type === 'runway') {
@@ -287,12 +401,14 @@ const NO_TREES = [];
       ZONES.push({ ax: L.ax, az: L.az, bx: L.bx, bz: L.bz, r: 75, blend: 150, h: Math.max(6, h / 5) });
       NO_TREES.push({ ax: L.ax, az: L.az + 900, bx: L.bx, bz: L.bz - 450, r: 70 });
     } else {
-      ZONES.push({ ax: L.x, az: L.z, bx: L.x, bz: L.z, r: 45, blend: 120, h: Math.max(5, baseHeight(L.x, L.z)) });
+      const fl = L.flat || { r: 45, blend: 120 };
+      ZONES.push({ ax: L.x, az: L.z, bx: L.x, bz: L.z, r: fl.r, blend: fl.blend, h: Math.max(5, baseHeight(L.x, L.z)) });
     }
     if (c.spawn.ground && L.type !== 'runway') ZONES.push({ ax: c.spawn.x, az: c.spawn.z, bx: c.spawn.x, bz: c.spawn.z, r: 25, blend: 80, h: Math.max(5, baseHeight(c.spawn.x, c.spawn.z)) });
     for (const r of c.rings) NO_TREES.push({ ax: r[0], az: r[1], bx: r[0], bz: r[1], r: c.ringR + 25 });
+    for (const z of c.flatten || []) ZONES.push(z);   // extra level-specific flat areas (e.g. a pad on a butte top)
   }
-})();
+}
 function terrainFn(x, z) {
   let h = baseHeight(x, z);
   for (const zn of ZONES) {
@@ -302,7 +418,9 @@ function terrainFn(x, z) {
   return h;
 }
 
-function createWorld() {
+function createWorld(levelId = 'heartland') {
+  LEVEL = LEVELS[levelId]; COURSES = LEVEL.courses;
+  buildZones();
   const N = WORLD.seg, cell = WORLD.size / N, half = WORLD.size / 2, N1 = N + 1;
   const hts = new Float32Array(N1 * N1);
   for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) hts[j * N1 + i] = terrainFn(-half + i * cell, -half + j * cell);
@@ -314,7 +432,7 @@ function createWorld() {
     if (u + v < 1) return h00 + (h10 - h00) * u + (h01 - h00) * v;
     return h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v);
   }
-  const W = { N, cell, half, hts, groundAt, thermals: [], course: null };
+  const W = { N, cell, half, hts, groundAt, thermals: [], course: null, level: LEVEL };
   W.surfaceAt = (x, z) => Math.max(groundAt(x, z), WORLD.water);
   W.isWater = (x, z) => groundAt(x, z) < WORLD.water - 0.3;
 
@@ -322,21 +440,15 @@ function createWorld() {
   const trees = [], step = 16, R = 2700;
   for (let x = -R; x < R; x += step) for (let z = -R; z < R; z += step) {
     const jx = x + (hash2(x, z, 77) - 0.5) * step * 0.9, jz = z + (hash2(x, z, 78) - 0.5) * step * 0.9;
-    const f = forestN(jx, jz);
-    const p = (f > 0.04 ? smoothstep(0.04, 0.26, f) * 0.85 : 0) + 0.012;
-    const rr = hash2(x, z, 79);
-    if (rr > p) continue;
-    const h = groundAt(jx, jz);
-    if (h < 2.5 || h > 400) continue;
+    const h = groundAt(jx, jz), k = hash2(x, z, 80);
+    const spec = LEVEL.tree(jx, jz, h, k, hash2(x, z, 79));
+    if (!spec) continue;
     if (Math.abs(groundAt(jx + 6, jz) - groundAt(jx - 6, jz)) + Math.abs(groundAt(jx, jz + 6) - groundAt(jx, jz - 6)) > 9) continue;
-    if (isField(jx, jz)) continue;
     let blocked = false;
     for (const zn of ZONES) if (segDist(jx, jz, zn.ax, zn.az, zn.bx, zn.bz) < zn.r + zn.blend * 0.6) { blocked = true; break; }
     if (!blocked) for (const nt of NO_TREES) if (segDist(jx, jz, nt.ax, nt.az, nt.bx, nt.bz) < nt.r) { blocked = true; break; }
     if (blocked) continue;
-    const k = hash2(x, z, 80);
-    const pine = h > 140 || k > 0.6;
-    trees.push({ x: jx, z: jz, y: h, pine, h: pine ? 10 + k * 8 : 7 + k * 5, r: pine ? 3 + k * 1.5 : 3.5 + k * 1.8, shade: hash2(x, z, 81) });
+    trees.push({ x: jx, z: jz, y: h, ...spec, shade: hash2(x, z, 81) });
   }
   const grid = new Map(), GC = 40;
   for (const t of trees) { const key = Math.floor(t.x / GC) * 100000 + Math.floor(t.z / GC); if (!grid.has(key)) grid.set(key, []); grid.get(key).push(t); }
@@ -375,7 +487,7 @@ function createWorld() {
 
 // Resolve a course against the terrain: absolute ring positions, ring facing, spawn, target.
 function prepareCourse(key, W) {
-  const c = COURSES[key];
+  const c = W.level.courses[key];
   const L = c.landing;
   const target = L.type === 'runway'
     ? new V3(L.ax, W.groundAt(L.ax, L.markerZ), L.markerZ)
@@ -732,7 +844,8 @@ const pixelLabel = () => { const l = PIXEL_LEVELS.find(l => l[0] === RENDER_H); 
 window.addEventListener('resize', resize);
 resize();
 
-scene.add(new THREE.HemisphereLight(0xdff0ff, 0x56703a, 1.75));
+const hemi = new THREE.HemisphereLight(0xdff0ff, 0x56703a, 1.75);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff0d0, 1.9);
 sun.position.set(0.55, 1, 0.35);
 scene.add(sun);
@@ -741,29 +854,92 @@ const tv = v => new THREE.Vector3(v.x, v.y, v.z);
 const col = hex => new THREE.Color(hex);
 const lambert = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, flatShading: true, ...extra });
 
-// Sky dome
-{
-  const g = new THREE.SphereGeometry(4600, 16, 10);
-  const top = col('#3b86dc'), mid = col('#8cc8f0');
-  const cs = [];
-  const p = g.attributes.position;
+// Sky dome (colors set per level in paintSky)
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(4600, 16, 10), new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
+skyDome.renderOrder = -10;
+scene.add(skyDome);
+function paintSky(look) {
+  const g = skyDome.geometry, top = col(look.skyTop), mid = col(look.skyMid), hor = col(look.horizon), cs = [], p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const y = p.getY(i) / 4600;
-    const c = y > 0.25 ? mid.clone().lerp(top, smoothstep(0.25, 0.9, y)) : HORIZON.clone().lerp(mid, smoothstep(-0.05, 0.25, y));
+    const c = y > 0.25 ? mid.clone().lerp(top, smoothstep(0.25, 0.9, y)) : hor.clone().lerp(mid, smoothstep(-0.05, 0.25, y));
     cs.push(c.r, c.g, c.b);
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(cs, 3));
-  var skyDome = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
-  skyDome.renderOrder = -10;
-  scene.add(skyDome);
+  scene.background.copy(hor); scene.fog.color.copy(hor);
+  FOG_BASE[0] = look.fog[0]; FOG_BASE[1] = look.fog[1];
+  hemi.color.set(look.hemi[0]); hemi.groundColor.set(look.hemi[1]); hemi.intensity = look.hemi[2];
+  sun.color.set(look.sun[0]); sun.intensity = look.sun[1];
 }
+const FOG_BASE = [700, 3300];
 
 let W; // world (sim side)
+// ---------- level looks: sky, light, terrain colors, plants, scenery ----------
 const PAL = {
   sand: col('#dcc690'), mud: col('#8d7a52'), grassA: col('#73c53e'), grassB: col('#4f9b2f'), forest: col('#3d7a2a'),
   rock: col('#8c8575'), rockHi: col('#a8a294'), snow: col('#f2f5f7'), dirt: col('#9a7a4a'),
   fields: ['#e3c45c', '#86d24c', '#5aa338', '#a6713f', '#b9dc62', '#d9a94a'].map(col),
 };
+function heartlandColor(c, x, y, z, slope) {
+  if (y < -0.5) c.copy(PAL.mud);
+  else if (y < 2.2) c.copy(PAL.sand);
+  else if (y > 470 + 30 * vnoise(x / 90, z / 90, 3)) c.copy(PAL.snow);
+  else if (slope > 0.9) c.copy(y > 200 ? PAL.rockHi : PAL.rock);
+  else if (slope > 0.6) c.copy(PAL.dirt).lerp(PAL.rock, 0.4);
+  else if (isField(x, z) && y < 90) c.copy(PAL.fields[Math.floor(hash2(Math.floor(x / 170), Math.floor(z / 130), 5) * PAL.fields.length)]);
+  else {
+    const f = forestN(x, z);
+    c.copy(PAL.grassA).lerp(PAL.grassB, clamp(0.5 + 0.8 * vnoise(x / 260, z / 260, 8), 0, 1));
+    if (f > 0.05) c.lerp(PAL.forest, smoothstep(0.05, 0.25, f));
+    if (y > 150) c.lerp(PAL.rock, smoothstep(150, 380, y) * 0.55);
+  }
+}
+const DESERT = {
+  mud: col('#7d6a4c'), sand: col('#e6cc98'), sandB: col('#d9b57c'), wash: col('#efdcb4'), scrub: col('#b9a66a'),
+  mesaTop: col('#c99a62'), mesaTopB: col('#b58250'), talus: col('#c77c50'),
+  strata: ['#b9533a', '#d9824a', '#c8643c', '#e3a464', '#9c4a34', '#d0703f'].map(col),
+};
+function canyonColor(c, x, y, z, slope) {
+  if (y < -0.5) c.copy(DESERT.mud);
+  else if (slope > 0.55) {
+    // red rock walls in horizontal bands
+    const band = Math.floor((y + 5 * vnoise(x / 140, z / 140, 7)) / 11);
+    c.copy(DESERT.strata[((band % 6) + 6) % 6]);
+    if (slope < 0.8) c.lerp(DESERT.talus, 0.35);
+  } else if (y > 90) {
+    c.copy(DESERT.mesaTop).lerp(DESERT.mesaTopB, clamp(0.5 + vnoise(x / 180, z / 180, 9), 0, 1));
+    if (vnoise(x / 60, z / 60, 12) > 0.35) c.lerp(DESERT.scrub, 0.4);
+  } else if (y < 6) c.copy(DESERT.wash);
+  else {
+    c.copy(DESERT.sand).lerp(DESERT.sandB, clamp(0.5 + 0.9 * vnoise(x / 300, z / 300, 10), 0, 1));
+    if (vnoise(x / 70, z / 70, 11) > 0.45) c.lerp(DESERT.scrub, 0.35);
+  }
+}
+const LOOKS = {
+  heartland: { horizon: '#cfe9f7', skyTop: '#3b86dc', skyMid: '#8cc8f0', hemi: [0xdff0ff, 0x56703a, 1.75], sun: [0xfff0d0, 1.9], fog: [700, 3300], water: '#3a8ad0', terrain: heartlandColor, clouds: 46, cloudTint: '#7f93ab' },
+  canyon: { horizon: '#f7dfc4', skyTop: '#2c6cd0', skyMid: '#86bdea', hemi: [0xfff0dc, 0xa0603a, 1.65], sun: [0xfff0d0, 2.05], fog: [900, 3800], water: '#3f9ab8', terrain: canyonColor, clouds: 20, cloudTint: '#a68a7a' },
+};
+
+// ---------- vehicle skins per level (colors, plus a few model options) ----------
+const SKINS = {
+  heartland: {
+    plane: { body: '#d8362b', wing: '#f2c53d', trim: '#f6f1e4', accent: '#3d7be0', pilot: '#7a5232', scarf: '#ffffff' },
+    drop: { body: '#3d7be0', wing: '#f6f1e4', trim: '#e8463a', accent: '#3d7be0', pilot: '#7a5232', scarf: '#ffffff' },
+    glider: { sail: ['#ff8a2a', '#ffc93c', '#3d7be0'], suit: '#2f8f5b', harness: '#246f47', helmet: '#ff8a2a', accent: '#ffc93c' },
+    jetpack: { suit: '#3d7be0', helmet: '#f6f1e4', accent: '#ffc93c', tanks: '#d4dbe4', band: '#e8463a' },
+    skydive: { suit: '#e8463a', helmet: '#262a35', accent: '#f6f1e4', canopy: ['#e8463a', '#f6f1e4', '#ffc93c'] },
+  },
+  canyon: {
+    plane: { body: '#2f9e8f', wing: '#efe6d2', trim: '#d9823a', accent: '#c8463a', pilot: '#5a3b26', scarf: '#e8463a', spats: true },
+    drop: { body: '#c8643c', wing: '#efe6d2', trim: '#2f9e8f', accent: '#2f9e8f', pilot: '#5a3b26', scarf: '#ffc93c', spats: true },
+    glider: { sail: ['#7b3fa0', '#ffc93c', '#2fb5a8'], suit: '#7b3fa0', harness: '#5a2d78', helmet: '#2fb5a8', accent: '#ffc93c', swept: true },
+    jetpack: { suit: '#e8463a', helmet: '#262a35', accent: '#ffc93c', tanks: '#e8c860', band: '#262a35', fins: true },
+    skydive: { suit: '#2fb5a8', helmet: '#f6f1e4', accent: '#7b3fa0', canopy: ['#7b3fa0', '#ffc93c', '#2fb5a8'] },
+  },
+};
+
+let levelGroup = new THREE.Group(); scene.add(levelGroup);
+let LOOK = LOOKS.heartland, SKIN = SKINS.heartland, levelId = 'heartland';
 
 function buildTerrain() {
   const { N, cell, half, hts } = W, N1 = N + 1;
@@ -776,20 +952,7 @@ function buildTerrain() {
     const x = (pos[i0] + pos[i0 + 3] + pos[i0 + 6]) / 3, y = (pos[i0 + 1] + pos[i0 + 4] + pos[i0 + 7]) / 3, z = (pos[i0 + 2] + pos[i0 + 5] + pos[i0 + 8]) / 3;
     const hmax = Math.max(pos[i0 + 1], pos[i0 + 4], pos[i0 + 7]), hmin = Math.min(pos[i0 + 1], pos[i0 + 4], pos[i0 + 7]);
     const slope = (hmax - hmin) / cell;
-    if (y < -0.5) c.copy(PAL.mud);
-    else if (y < 2.2) c.copy(PAL.sand);
-    else if (y > 470 + 30 * vnoise(x / 90, z / 90, 3)) c.copy(PAL.snow);
-    else if (slope > 0.9) c.copy(y > 200 ? PAL.rockHi : PAL.rock);
-    else if (slope > 0.6) c.copy(PAL.dirt).lerp(PAL.rock, 0.4);
-    else if (isField(x, z) && y < 90) {
-      const fi = Math.floor(hash2(Math.floor(x / 170), Math.floor(z / 130), 5) * PAL.fields.length);
-      c.copy(PAL.fields[fi]);
-    } else {
-      const f = forestN(x, z);
-      c.copy(PAL.grassA).lerp(PAL.grassB, clamp(0.5 + 0.8 * vnoise(x / 260, z / 260, 8), 0, 1));
-      if (f > 0.05) c.lerp(PAL.forest, smoothstep(0.05, 0.25, f));
-      if (y > 150) c.lerp(PAL.rock, smoothstep(150, 380, y) * 0.55);
-    }
+    LOOK.terrain(c, x, y, z, slope);
     const jit = 1 + (hash2(Math.floor(x), Math.floor(z), 99) - 0.5) * 0.07;
     for (let n = 0; n < 3; n++) { cols[i0 + n * 3] = c.r * jit; cols[i0 + n * 3 + 1] = c.g * jit; cols[i0 + n * 3 + 2] = c.b * jit; }
   };
@@ -798,29 +961,40 @@ function buildTerrain() {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
   g.computeVertexNormals();
-  scene.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })));
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size, WORLD.size), new THREE.MeshLambertMaterial({ color: '#3a8ad0', transparent: true, opacity: 0.9 }));
+  levelGroup.add(new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })));
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size, WORLD.size), new THREE.MeshLambertMaterial({ color: LOOK.water, transparent: true, opacity: 0.9 }));
   water.rotation.x = -Math.PI / 2; water.position.y = WORLD.water;
-  scene.add(water);
+  levelGroup.add(water);
 }
 
 function buildTrees() {
-  const pines = W.trees.filter(t => t.pine), rounds = W.trees.filter(t => !t.pine);
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
-  const make = (list, geo, mat, fn) => {
-    const im = new THREE.InstancedMesh(geo, mat, list.length);
-    list.forEach((t, i) => { fn(t, p, s, c); m4.compose(p, q, s); im.setMatrixAt(i, m4); im.setColorAt(i, c); });
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
+  const make = (list, geo, fn) => {
+    if (!list.length) return;
+    const im = new THREE.InstancedMesh(geo, lambert('#ffffff'), list.length);
+    list.forEach((t, i) => { fn(t, p, sc, c); m4.compose(p, q, sc); im.setMatrixAt(i, m4); im.setColorAt(i, c); });
     im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true;
-    scene.add(im);
+    levelGroup.add(im);
   };
-  const pineGeo = new THREE.ConeGeometry(1, 1, 6, 1); pineGeo.translate(0, 0.5, 0);
-  const roundGeo = new THREE.IcosahedronGeometry(1, 0);
-  const trunkGeo = new THREE.BoxGeometry(1, 1, 1); trunkGeo.translate(0, 0.5, 0);
-  const white = lambert('#ffffff');
-  const pineA = col('#2f6b34'), pineB = col('#3f8a3c'), roundA = col('#4f9e36'), roundB = col('#7cbf3a');
-  make(pines, pineGeo, white, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.18, t.z); s.set(t.r, t.h * 0.85, t.r); c.copy(pineA).lerp(pineB, t.shade); });
-  make(rounds, roundGeo, white, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.62, t.z); s.set(t.r, t.h * 0.42, t.r); c.copy(roundA).lerp(roundB, t.shade); if (t.shade > 0.9) c.set('#d98a2b'); });
-  make(W.trees, trunkGeo, white, (t, p, s, c) => { p.set(t.x, t.y - 0.5, t.z); s.set(0.7, t.h * 0.4, 0.7); c.set('#6b4a2b'); });
+  const of = k => W.trees.filter(t => t.kind === k);
+  const cone = new THREE.ConeGeometry(1, 1, 6, 1); cone.translate(0, 0.5, 0);
+  const ico = new THREE.IcosahedronGeometry(1, 0);
+  const trunk = new THREE.BoxGeometry(1, 1, 1); trunk.translate(0, 0.5, 0);
+  const column = new THREE.CylinderGeometry(1, 1, 1, 6); column.translate(0, 0.5, 0);
+  const A = (a, b2) => [col(a), col(b2)];
+  const [pineA, pineB] = A('#2f6b34', '#3f8a3c'), [roundA, roundB] = A('#4f9e36', '#7cbf3a'), [junA, junB] = A('#3f5f34', '#5d7b3e');
+  const [cacA, cacB] = A('#4f8a46', '#6aa356'), [sageA, sageB] = A('#8f9b70', '#b0b48a');
+  make(of('pine'), cone, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.18, t.z); s.set(t.r, t.h * 0.85, t.r); c.copy(pineA).lerp(pineB, t.shade); });
+  make(of('round'), ico, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.62, t.z); s.set(t.r, t.h * 0.42, t.r); c.copy(roundA).lerp(roundB, t.shade); if (t.shade > 0.9) c.set('#d98a2b'); });
+  make(of('juniper'), ico, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.55, t.z); s.set(t.r, t.h * 0.5, t.r * 0.9); c.copy(junA).lerp(junB, t.shade); });
+  make(of('sage'), ico, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.35, t.z); s.set(t.r, t.h * 0.45, t.r); c.copy(sageA).lerp(sageB, t.shade); });
+  const cacti = of('cactus');
+  make(cacti, column, (t, p, s, c) => { p.set(t.x, t.y - 0.3, t.z); s.set(0.45, t.h + 0.3, 0.45); c.copy(cacA).lerp(cacB, t.shade); });
+  for (const side of [-1, 1]) make(cacti, column, (t, p, s, c) => {   // two arms, at different heights per plant
+    const ang = t.shade * 6.28, ax = Math.cos(ang) * side, az = Math.sin(ang) * side, y0 = t.h * (side < 0 ? 0.35 : 0.5);
+    p.set(t.x + ax * 0.85, t.y + y0, t.z + az * 0.85); s.set(0.32, t.h * 0.38, 0.32); c.copy(cacA).lerp(cacB, 1 - t.shade);
+  });
+  make(W.trees.filter(t => t.kind === 'pine' || t.kind === 'round' || t.kind === 'juniper'), trunk, (t, p, s, c) => { p.set(t.x, t.y - 0.5, t.z); s.set(0.7, t.h * (t.kind === 'juniper' ? 0.45 : 0.4), 0.7); c.set(t.kind === 'juniper' ? '#5a4030' : '#6b4a2b'); });
 }
 
 function box(w, h, d, color, x = 0, y = 0, z = 0, parent) {
@@ -829,9 +1003,11 @@ function box(w, h, d, color, x = 0, y = 0, z = 0, parent) {
 }
 
 function buildProps() {
+  const scene = levelGroup;   // everything below belongs to the current level
+  const desert = levelId === 'canyon';
   // Barns and silos dotted around the farmland
   let count = 0;
-  for (let x = -2200; x < 2200 && count < 16; x += 130) for (let z = -800; z < 2200 && count < 16; z += 130) {
+  if (!desert) for (let x = -2200; x < 2200 && count < 16; x += 130) for (let z = -800; z < 2200 && count < 16; z += 130) {
     if (!isField(x, z) || hash2(x, z, 404) > 0.06) continue;
     const h = W.groundAt(x, z);
     if (h < 3 || Math.abs(W.groundAt(x + 12, z) - W.groundAt(x - 12, z)) > 2) continue;
@@ -846,10 +1022,21 @@ function buildProps() {
     g.position.set(x, h, z); g.rotation.y = hash2(x, z, 9) * Math.PI;
     scene.add(g); count++;
   }
+  // Adobe huts near the desert airstrip
+  if (desert) {
+    const L0 = COURSES.plane.landing;
+    [[-70, 0.32], [-95, 0.42], [-70, 0.55], [60, 0.5]].forEach(([dx, f], i) => {
+      const x = L0.ax + dx, z = lerp(L0.az, L0.bz, f), h = W.groundAt(x, z), g = new THREE.Group();
+      box(9 + i, 4.5, 8, '#d9a877', 0, 2.25, 0, g); box(10 + i, 0.6, 9, '#b9875a', 0, 4.7, 0, g);
+      box(2, 3, 0.2, '#6b4a2b', 0, 1.5, -4.05, g);
+      for (const vx of [-3, 0, 3]) box(0.35, 0.35, 1.2, '#8a5a36', vx, 4.2, -4.4, g);   // roof beams
+      g.position.set(x, h, z); g.rotation.y = hash2(i, 3, 17) * 0.4 - 0.2; scene.add(g);
+    });
+  }
   // Clouds
   const puffGeo = new THREE.IcosahedronGeometry(1, 0);
   const puffs = [];
-  for (let i = 0; i < 46; i++) {
+  for (let i = 0; i < LOOK.clouds; i++) {
     const cx = (hash2(i, 1, 300) - 0.5) * 5600, cz = (hash2(i, 2, 300) - 0.5) * 5600, cy = 620 + hash2(i, 3, 300) * 420;
     const n = 3 + Math.floor(hash2(i, 4, 300) * 4);
     for (let k = 0; k < n; k++) {
@@ -857,7 +1044,7 @@ function buildProps() {
       puffs.push([cx + (hash2(i, k, 302) - 0.5) * 120, cy + (hash2(i, k, 303) - 0.5) * 20, cz + (hash2(i, k, 304) - 0.5) * 90, r]);
     }
   }
-  const cloud = new THREE.InstancedMesh(puffGeo, lambert('#ffffff', { emissive: '#7f93ab', emissiveIntensity: 0.55 }), puffs.length);
+  const cloud = new THREE.InstancedMesh(puffGeo, lambert('#ffffff', { emissive: LOOK.cloudTint, emissiveIntensity: 0.55 }), puffs.length);
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
   puffs.forEach((p, i) => { m4.compose(new THREE.Vector3(p[0], p[1], p[2]), q, new THREE.Vector3(p[3], p[3] * 0.55, p[3])); cloud.setMatrixAt(i, m4); });
   scene.add(cloud);
@@ -866,18 +1053,19 @@ function buildProps() {
   const L = COURSES.plane.landing;
   const rh = W.groundAt(L.ax, (L.az + L.bz) / 2);
   const len = Math.abs(L.az - L.bz), cz = (L.az + L.bz) / 2;
-  box(L.w, 0.3, len, '#4a4d57', L.ax, rh + 0.05, cz, scene);
-  for (let z = L.bz + 20; z < L.az - 20; z += 30) box(1, 0.32, 12, '#f4f4ee', L.ax, rh + 0.08, z, scene);
+  box(L.w, 0.3, len, desert ? '#b8946a' : '#4a4d57', L.ax, rh + 0.05, cz, scene);
+  for (let z = L.bz + 20; z < L.az - 20; z += 30) box(1, 0.32, 12, desert ? '#efe6d2' : '#f4f4ee', L.ax, rh + 0.08, z, scene);
   for (const end of [L.az - 8, L.bz + 8]) for (let i = -5; i <= 5; i++) if (i !== 0) box(1.4, 0.32, 10, '#f4f4ee', L.ax + i * 2.4, rh + 0.08, end, scene);
   for (const sx of [-1, 1]) box(4, 0.4, 14, '#ff8a2a', L.ax + sx * (L.w / 2 - 3), rh + 0.12, L.markerZ, scene);
   const hangar = new THREE.Group();
-  const shell = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 24, 10, 1, false, 0, Math.PI), lambert('#9aa6b8'));
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 24, 10, 1, false, 0, Math.PI), lambert(desert ? '#b5653e' : '#9aa6b8'));
   shell.rotation.z = Math.PI / 2; shell.rotation.y = Math.PI / 2; hangar.add(shell);
   box(17, 9, 0.4, '#3a3f4f', 0, 4.5, -12, hangar);
-  hangar.position.set(L.ax - 55, rh, 560); hangar.rotation.y = -Math.PI / 2; scene.add(hangar);
-  box(0.3, 8, 0.3, '#e9e9e9', L.ax + 30, rh + 4, 300, scene);
+  hangar.position.set(L.ax - 55, rh, lerp(L.az, L.bz, 0.27)); hangar.rotation.y = -Math.PI / 2; scene.add(hangar);
+  const sockZ = lerp(L.az, L.bz, 0.62);
+  box(0.3, 8, 0.3, '#e9e9e9', L.ax + 30, rh + 4, sockZ, scene);
   const sock = new THREE.Mesh(new THREE.ConeGeometry(0.8, 4, 6, 1, true), lambert('#ff6a2a', { side: THREE.DoubleSide }));
-  sock.rotation.z = Math.PI / 2; sock.position.set(L.ax + 32, rh + 7.6, 300); scene.add(sock);
+  sock.rotation.z = Math.PI / 2; sock.position.set(L.ax + 32, rh + 7.6, sockZ); scene.add(sock);
 
   // Bullseye targets and the jetpack pad
   const tex = (() => {
@@ -890,18 +1078,23 @@ function buildProps() {
     const L2 = COURSES[key].landing;
     const m = new THREE.Mesh(new THREE.CircleGeometry(L2.r, 24), new THREE.MeshLambertMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -2 }));
     m.rotation.x = -Math.PI / 2; m.position.set(L2.x, W.groundAt(L2.x, L2.z) + 0.12, L2.z); scene.add(m);
+    m.userData.lesson = key; targetMeshes.push(m);
   }
-  const js = COURSES.jetpack.spawn;
+  const js = COURSES.jetpack.spawn;   // (the landing targets above are shown only for the lesson being flown)
   const pad = new THREE.Mesh(new THREE.CylinderGeometry(6, 6.4, 0.5, 8), lambert('#6d7383'));
   pad.position.set(js.x, W.groundAt(js.x, js.z) + 0.1, js.z); scene.add(pad);
   const padRing = new THREE.Mesh(new THREE.RingGeometry(4.2, 5.2, 8), lambert('#ffc93c'));
   padRing.rotation.x = -Math.PI / 2; padRing.position.set(js.x, W.groundAt(js.x, js.z) + 0.38, js.z); scene.add(padRing);
 }
 
+// The bullseyes of the other lessons are hidden so each lesson shows only its own target.
+let targetMeshes = [];
+function showTargetsFor(m) { for (const t of targetMeshes) t.visible = t.userData.lesson === m; }
 // ---------- vehicle models (built from boxes, forward is -Z) ----------
 // Biplane: faceted fuselage, radial engine, ribbed wings with moving ailerons, elevator and rudder,
 // N-struts with bracing wires, spoked wheels, and a pilot in a leather helmet and scarf. Forward is -Z.
-function makeBiplane(body = '#d8362b', wing = '#f2c53d', trim = '#f6f1e4') {
+function makeBiplane(skin = SKINS.heartland.plane) {
+  const { body, wing, trim } = skin, accent = skin.accent || '#3d7be0';
   const g = new THREE.Group();
   const darker = c => { const k = col(c); k.multiplyScalar(0.78); return '#' + k.getHexString(); };
   const wingDark = darker(wing), bodyDark = darker(body);
@@ -919,7 +1112,7 @@ function makeBiplane(body = '#d8362b', wing = '#f2c53d', trim = '#f6f1e4') {
   // roundels on the fuselage sides
   for (const s of [-1, 1]) {
     const ring = new THREE.Mesh(new THREE.CircleGeometry(0.32, 12), mat(trim)); ring.position.set(s * 0.53, 0.02, 1.05); ring.rotation.y = s * Math.PI / 2 + s * 0.08; g.add(ring);
-    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.17, 12), mat('#3d7be0')); dot.position.set(s * 0.535, 0.02, 1.05); dot.rotation.y = ring.rotation.y; g.add(dot);
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.17, 12), mat(accent)); dot.position.set(s * 0.535, 0.02, 1.05); dot.rotation.y = ring.rotation.y; g.add(dot);
   }
   // radial engine: polished cowling ring, dark crankcase, cylinder heads, exhaust stubs, spinner
   tube(g, -3.0, -2.35, 0.7, 0.66, '#cfd6e0', 0, 12);
@@ -948,13 +1141,13 @@ function makeBiplane(body = '#d8362b', wing = '#f2c53d', trim = '#f6f1e4') {
   ws.position.set(0, 0.72, -0.44); ws.rotation.x = -0.35; g.add(ws);
   const rest = tube(g, 0.62, 1.7, 0.2, 0.06, body, 0.55, 6); rest.scale.set(1, 1.25, 1);
   // pilot in a leather helmet, goggles and a long scarf
-  const rig = makePilot({ suit: '#7a5232', accent: '#5a3b26', belt: '#262a35', helmet: '#6b4a2b', glove: '#3a2a1e', boot: '#262a35', skin: '#f0b98a' });
+  const rig = makePilot({ suit: skin.pilot || '#7a5232', accent: '#5a3b26', belt: '#262a35', helmet: '#6b4a2b', glove: '#3a2a1e', boot: '#262a35', skin: '#f0b98a' });
   rig.root.position.set(0, 0.08, 0.15); g.add(rig.root);
   for (const s of [-1, 1]) { const k = s < 0 ? 'L' : 'R'; rot(rig.j['hip' + k], 1.45, 0, 0.05, s); rot(rig.j['kn' + k], -1.3, 0, 0, s); rot(rig.j['sh' + k], 0.7, 0, 0.12, s); rot(rig.j['el' + k], 0.9, 0, 0, s); }
   const scarf = []; let parent = rig.j.neck;
   for (let i = 0; i < 4; i++) {
     const seg = joint(parent, 0, i ? 0 : 0.02, i ? 0.17 : 0.07);
-    part(seg, 0.1 - i * 0.012, 0.03, 0.18, i % 2 ? '#f6f1e4' : '#ffffff', 0, 0, 0.09);
+    part(seg, 0.1 - i * 0.012, 0.03, 0.18, i % 2 ? '#f6f1e4' : (skin.scarf || '#ffffff'), 0, 0, 0.09);
     scarf.push(seg); parent = seg;
   }
   // wings: main panel with rib caps, rounded tips, leading-edge strip; upper wing carries the ailerons
@@ -1002,7 +1195,7 @@ function makeBiplane(body = '#d8362b', wing = '#f2c53d', trim = '#f6f1e4') {
   g.add(new THREE.Mesh(finGeo, mat(body)));
   const rudder = joint(g, 0, 0.64, 2.96);
   part(rudder, 0.09, 1.25, 0.5, trim, 0, 0, 0.25);
-  for (const yy of [-0.35, 0.05, 0.45]) part(rudder, 0.1, 0.18, 0.51, '#3d7be0', 0, yy, 0.25);
+  for (const yy of [-0.35, 0.05, 0.45]) part(rudder, 0.1, 0.18, 0.51, accent, 0, yy, 0.25);
   part(g, 0.08, 0.35, 0.08, '#3a3f4f', 0, -0.3, 2.85).rotation.x = 0.5;     // tail skid
   // landing gear: V-struts, axle fairing, spoked wheels
   const wheels = [];
@@ -1013,6 +1206,11 @@ function makeBiplane(body = '#d8362b', wing = '#f2c53d', trim = '#f6f1e4') {
     const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.16, 14), mat('#1f2229')); tire.rotation.z = Math.PI / 2; wheel.add(tire);
     const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.18, 10), mat('#cfd6e0')); hub.rotation.z = Math.PI / 2; wheel.add(hub);
     for (let i = 0; i < 3; i++) { const sp = part(wheel, 0.19, 0.42, 0.04, '#5a6070', 0, 0, 0); sp.rotation.x = i * Math.PI / 3; }
+    if (skin.spats) {   // racer-style wheel fairings
+      const spat = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 6), mat(body));
+      spat.scale.set(0.42, 0.62, 1.25); spat.position.set(s * 1.0, -1.28, -1.55); g.add(spat);
+      part(g, 0.3, 0.1, 0.9, trim, s * 1.0, -1.0, -1.55);
+    }
   }
   rod(g, V3T(-0.95, -1.35, -1.6), V3T(0.95, -1.35, -1.6), 0.04, '#3a3f4f');
   g.userData = { prop, blur, ailerons, elevator, rudder, wheels, scarf, rig, exhausts, st: { ail: 0, elev: 0, rud: 0, wheel: 0, puff: 0 } };
@@ -1147,14 +1345,15 @@ function rod(parent, a, b, r, c) {
   aimRod(m, a, b); parent.add(m); return m;
 }
 
-function makeGlider() {
+function makeGlider(skin = SKINS.heartland.glider) {
   const g = new THREE.Group();
   // sail
   const geo = new THREE.BufferGeometry();
-  const nose = [0, 0.35, -2.4], lt = [-5.2, 0, 1.3], rt = [5.2, 0, 1.3], tail = [0, 0.15, 0.9], ml = [-2.4, 0.2, -0.4], mr = [2.4, 0.2, -0.4];
+  const sw = skin.swept ? 1 : 0;
+  const nose = [0, 0.35, -2.4 - 0.4 * sw], lt = [-5.2 - 0.8 * sw, 0.1 * sw, 1.3 + 0.5 * sw], rt = [5.2 + 0.8 * sw, 0.1 * sw, 1.3 + 0.5 * sw], tail = [0, 0.15, 0.9], ml = [-2.4, 0.2, -0.4 - 0.2 * sw], mr = [2.4, 0.2, -0.4 - 0.2 * sw];
   const v = [...nose, ...ml, ...tail, ...ml, ...lt, ...tail, ...nose, ...tail, ...mr, ...mr, ...tail, ...rt];
   geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
-  const cs = []; const a = col('#ff8a2a'), b = col('#3d7be0'), c2 = col('#ffc93c');
+  const cs = []; const a = col(skin.sail[0]), b = col(skin.sail[2]), c2 = col(skin.sail[1]);
   [a, c2, a, b].forEach(cc => { for (let i = 0; i < 3; i++) cs.push(cc.r, cc.g, cc.b); });
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cs, 3));
   geo.computeVertexNormals();
@@ -1165,8 +1364,8 @@ function makeGlider() {
   rod(g, top, bl, 0.03, '#9aa3b5'); rod(g, top, br, 0.03, '#9aa3b5'); rod(g, bl, br, 0.03, '#d4dbe4');
   for (const p of [bl, br]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.05, 8), mat('#262a35')); w.rotation.z = Math.PI / 2; w.position.copy(p); g.add(w); }
   // pilot in a green harness, hanging prone from a strap
-  const rig = makePilot({ suit: '#2f8f5b', legs: '#2d3348', accent: '#ffc93c', belt: '#262a35', helmet: '#ff8a2a', glove: '#262a35', boot: '#5a3b26', skin: '#f0b98a' });
-  part(rig.j.spine, 0.46, 0.5, 0.3, '#246f47', 0, 0.22, 0.03);           // harness
+  const rig = makePilot({ suit: skin.suit, legs: '#2d3348', accent: skin.accent, belt: '#262a35', helmet: skin.helmet, glove: '#262a35', boot: '#5a3b26', skin: '#f0b98a' });
+  part(rig.j.spine, 0.46, 0.5, 0.3, skin.harness, 0, 0.22, 0.03);           // harness
   part(rig.j.spine, 0.12, 0.3, 0.06, '#d9a53a', 0, 0.25, 0.2);            // reserve parachute pouch
   g.add(rig.root);
   const strap = rod(g, V3T(0, 0.2, -0.2), V3T(0, -1.1, -0.3), 0.02, '#262a35');
@@ -1174,12 +1373,12 @@ function makeGlider() {
   return g;
 }
 
-function makeJetpacker() {
+function makeJetpacker(skin = SKINS.heartland.jetpack) {
   const g = new THREE.Group();
-  const rig = makePilot({ suit: '#3d7be0', accent: '#ffc93c', belt: '#262a35', helmet: '#f6f1e4', glove: '#262a35', boot: '#262a35', skin: '#f0b98a' });
+  const rig = makePilot({ suit: skin.suit, accent: skin.accent, belt: '#262a35', helmet: skin.helmet, glove: '#262a35', boot: '#262a35', skin: '#f0b98a' });
   g.add(rig.root);
   const sp = rig.j.spine, y0 = -0.1;   // rocket belt parts are placed relative to the hips; the spine joint sits 0.1 up
-  const metal = mat('#d4dbe4'), dark = mat('#2a2f3c'), brass = mat('#d9a53a'), red = mat('#e8463a');
+  const metal = mat(skin.tanks), dark = mat('#2a2f3c'), brass = mat('#d9a53a'), red = mat(skin.band);
   const cyl = (r1, r2, h, m, x, y, z, seg = 10, parent = sp) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg), m); c.position.set(x, y + (parent === sp ? y0 : 0), z); parent.add(c); return c; };
   const ball = (r, m, x, y, z) => { const c = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 6), m); c.position.set(x, y + y0, z); sp.add(c); return c; };
   // harness straps, back plate
@@ -1192,6 +1391,7 @@ function makeJetpacker() {
     part(sp, 0.25, 0.03, 0.26, red, sx, 0.42 + y0, 0.3);
   }
   cyl(0.065, 0.065, 0.48, red, 0, 0.32, 0.44, 8);
+  if (skin.fins) for (const sx of [-0.15, 0.15]) part(sp, 0.03, 0.22, 0.16, skin.band, sx + Math.sign(sx) * 0.12, 0.12 - 0.1, 0.36);   // little tank fins
   ball(0.065, red, 0, 0.56, 0.44);
   // gas generator and manifold arching over the shoulders, down-pipes to bell nozzles
   ball(0.09, brass, 0, 0.72, 0.3);
@@ -1216,9 +1416,9 @@ function makeJetpacker() {
   return g;
 }
 
-function makeSkydiver() {
+function makeSkydiver(skin = SKINS.heartland.skydive) {
   const g = new THREE.Group();
-  const rig = makePilot({ suit: '#e8463a', accent: '#f6f1e4', belt: '#262a35', helmet: '#262a35', glove: '#262a35', boot: '#262a35', skin: '#f0b98a' });
+  const rig = makePilot({ suit: skin.suit, accent: skin.accent, belt: '#262a35', helmet: skin.helmet, glove: '#262a35', boot: '#262a35', skin: '#f0b98a' });
   g.add(rig.root);
   const sp = rig.j.spine;
   part(sp, 0.38, 0.46, 0.17, '#262a35', 0, 0.22, 0.2);     // parachute container
@@ -1230,7 +1430,7 @@ function makeSkydiver() {
   const cells = 7, span = 7.4;
   for (let i = 0; i < cells; i++) {
     const t = (i / (cells - 1)) * 2 - 1;
-    const cell = box(span / cells + 0.05, 0.45, 2.8, i % 2 ? '#f6f1e4' : (i === 3 ? '#ffc93c' : '#e8463a'), t * span / 2 * 0.95, 6.2 - t * t * 0.9, 0, chute);
+    const cell = box(span / cells + 0.05, 0.45, 2.8, i % 2 ? skin.canopy[1] : (i === 3 ? skin.canopy[2] : skin.canopy[0]), t * span / 2 * 0.95, 6.2 - t * t * 0.9, 0, chute);
     cell.rotation.z = -t * 0.35;
   }
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -1518,6 +1718,12 @@ const Sound = (() => {
       const lp = filt('lowpass', 1100, 0.5, g);
       for (const m of ms) for (const det of [-0.0035, 0.0035]) osc('sawtooth', mtof(m) * (1 + det), t, end, lp);
     },
+    guitar(m, t, dur, v, dest) {   // plucked steel string: bright attack, quick filter fall
+      const f = mtof(m), end = t + dur + 0.6, g = gainNode(0, dest);
+      pluck(g, t, 0.12 * v, 0.004, 0.55 + dur * 0.4);
+      const lp = filt('lowpass', 3200, 3, g); lp.frequency.setValueAtTime(3600, t); lp.frequency.exponentialRampToValueAtTime(700, t + 0.35);
+      osc('sawtooth', f, t, end, lp); osc('sawtooth', f * 1.004, t, end, gainNode(0.5, lp));
+    },
     kick(t, v, dest) { const g = gainNode(0, dest); pluck(g, t, 0.55 * v, 0.003, 0.24); const o = osc('sine', 130, t, t + 0.3, g); o.frequency.exponentialRampToValueAtTime(42, t + 0.12); },
     snare(t, v, dest) {
       const g = gainNode(0, dest); pluck(g, t, 0.2 * v, 0.002, 0.15); noise(t, t + 0.2, filt('bandpass', 1900, 0.8, g));
@@ -1570,6 +1776,19 @@ const Sound = (() => {
       arp: true, padOn: true,
       drums: { kick: [0, 5], kickV: 0.6, rim: [6], shaker: [0, 1, 2, 3, 4, 5, 6, 7] },
     },
+  };
+  SONGS.mesa = { // "Mesa Sunset" — A minor, an easy western lope for the canyon
+    bpm: 96, swing: 0.6, lead: 'square', arpInst: 'guitar',
+    A: { chords: ['Am7', 'D7', 'Fmaj7', 'E7', 'Am7', 'G', 'Fmaj7', 'E7sus E7'],
+      mel: ['E5:2 A5:2 G5:1 E5:1 D5:2', 'F#5:3 E5:1 D5:2 A4:2', 'C5:2 E5:2 A5:3 G5:1', 'G#5:4 E5:2 r:2',
+        'A5:2 C6:2 B5:1 A5:1 G5:2', 'B5:3 A5:1 G5:2 D5:2', 'E5:2 F5:2 A5:2 C6:2', 'B5:4 G#5:2 E5:2'] },
+    B: { chords: ['Dm7', 'Am7', 'Bbmaj7', 'E7', 'Dm7', 'Am7', 'Fmaj7 G', 'E7'],
+      mel: ['F5:2 A5:2 C6:3 A5:1', 'E5:4 C5:2 E5:2', 'D5:2 F5:2 A5:2 F5:2', 'G#5:3 B5:1 D6:4',
+        'A5:2 F5:2 D5:2 F5:2', 'E5:3 G5:1 A5:4', 'C6:2 A5:2 B5:2 D6:2', 'E6:6 r:2'] },
+    form: ['A', 'B', 'A'],
+    bassPat: [[0, 'r', 2], [2, '5', 1], [3, 'r', 1], [4, 'o', 2], [6, '5', 1], [7, 'a', 1]],
+    arp: true,
+    drums: { kick: [0, 4], kickV: 0.8, snare: [2, 6], snareV: 0.45, rim: [3, 7], shaker: [0, 1, 2, 3, 4, 5, 6, 7] },
   };
   const QUAL = { maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], '7': [0, 4, 7, 10], '7sus': [0, 5, 7, 10], m: [0, 3, 7], '': [0, 4, 7] };
   function parseChord(sym) {
@@ -1629,7 +1848,7 @@ const Sound = (() => {
     // chords
     const voicing = () => { let r = 48 + ch.pc; if (r < 52) r += 12; const iv = ch.iv; return [r + iv[1], r + iv[2], r + (iv[3] || 12), r + 14]; };
     if (d.comp) for (const [at, len] of d.comp) if (at === pos) for (const m of voicing()) INST.epiano(m, t, len * e8, 0.34, dest);
-    if (d.arp) { const v = voicing(); INST.epiano(v[(pos * 3) % v.length] + (pos % 4 === 3 ? 12 : 0), t, e8 * 1.5, 0.32, dest); }
+    if (d.arp) { const v = voicing(); INST[d.arpInst || 'epiano'](v[(pos * 3) % v.length] + (pos % 4 === 3 ? 12 : 0), t, e8 * 1.5, 0.32, dest); }
     if (d.padOn && (pos === 0 || (pos === 4 && bar.chords.length > 1))) INST.pad(voicing().slice(0, 3), t, (bar.chords.length > 1 ? 4 : 8) * e8, 1, dest);
     // drums
     const dr = d.drums;
@@ -1740,7 +1959,7 @@ const Sound = (() => {
     lastState = state;
     // music
     let want = 'title';
-    if (state === 'play' || state === 'pause' || state === 'replay') want = SONG_FOR[mode];
+    if (state === 'play' || state === 'pause' || state === 'replay') want = levelId === 'canyon' ? 'mesa' : SONG_FOR[mode];
     else if (state === 'results' && clock - resultsAt < 3.5) want = null;
     playSong(want);
     set(musicFilter.frequency, state === 'pause' ? 650 : 18000, 0.15);
@@ -1851,7 +2070,7 @@ const Input = {
     s.left = b(14).pressed || lx < -0.6 || key('ArrowLeft');
     s.right = b(15).pressed || lx > 0.6 || key('ArrowRight');
     s.any = s.cross || s.options || (pad && pad.buttons.some(bt => bt.pressed));
-    for (const n of ['cross', 'circle', 'square', 'triangle', 'options', 'up', 'down', 'left', 'right', 'any']) this.p[n] = s[n] && !this.prev[n];
+    for (const n of ['cross', 'circle', 'square', 'triangle', 'options', 'up', 'down', 'left', 'right', 'any', 'l1', 'r1']) this.p[n] = s[n] && !this.prev[n];
     this.prev = s; this.s = s;
     s.crossP = this.p.cross;
     this.taps.clear();
@@ -1884,12 +2103,27 @@ const KEYS = {
 let state = 'loading', mode = 'plane', course = null, sim = null, run = null, endTimer = 0, selIndex = 0, pauseIndex = 0, resultIndex = 0;
 let vehicle = null, dropPlane = null, shadow = null, msgs = [], lastResult = null;
 const vehicleModels = {};
-const screens = ['loading', 'title', 'select', 'brief', 'pause', 'results'].reduce((o, n) => (o[n] = document.getElementById('screen-' + n), o), {});
+const screens = ['loading', 'title', 'select', 'brief', 'pause', 'results', 'travel'].reduce((o, n) => (o[n] = document.getElementById('screen-' + n), o), {});
 function show(name) { for (const n in screens) screens[n].hidden = n !== name; document.getElementById('app').classList.toggle('playing', name === null); }
 
+// Best results per level and lesson: { heartland: { plane: { score, medal } } }. medal is the best ever earned.
 let best = {};
 try { best = JSON.parse(localStorage.getItem('retrowings.best') || '{}') || {}; } catch (e) { best = {}; }
+if (best.plane || best.glider || best.jetpack || best.skydive) {   // migrate the old single-level format
+  const old = best; best = { heartland: {} };
+  for (const m of ['plane', 'glider', 'jetpack', 'skydive']) if (old[m]) best.heartland[m] = old[m];
+}
 function saveBest() { try { localStorage.setItem('retrowings.best', JSON.stringify(best)); } catch (e) { /* storage unavailable */ } }
+const MEDAL_RANK = { bronze: 1, silver: 2, gold: 3 };
+const bestOf = (lv, m) => (best[lv] || {})[m];
+// Testing aid: open the game with #unlockall to try every level without earning it.
+const UNLOCK_ALL = (() => { try { return location.hash === '#unlockall'; } catch (e) { return false; } })();
+function unlockProgress(id) {
+  const u = LEVELS[id].unlock; if (!u) return { done: 4, need: 4 };
+  const done = MODES.filter(m => (MEDAL_RANK[(bestOf(u.level, m) || {}).medal] || 0) >= MEDAL_RANK[u.medal]).length;
+  return { done, need: MODES.length, from: LEVELS[u.level].name, medal: u.medal };
+}
+function levelUnlocked(id) { if (UNLOCK_ALL) return true; const pr = unlockProgress(id); return pr.done >= pr.need; }
 
 // Pixel sprites for the lesson cards
 const SPRITES = {
@@ -1906,10 +2140,46 @@ function drawSprite(cv, rows) {
   x.imageSmoothingEnabled = false;
   const big = document.createElement('canvas'); big.width = 32; big.height = 20;
 }
+let tabIndex = 0;   // which level tab is showing on the lesson screen
+function renderTabs() {
+  const el = document.getElementById('tabs'); el.innerHTML = '';
+  LEVEL_ORDER.forEach((id, i) => {
+    const b = document.createElement('button');
+    const open = levelUnlocked(id);
+    b.className = 'tab' + (i === tabIndex ? ' sel' : '') + (open ? '' : ' locked');
+    b.textContent = (open ? '' : '🔒 ') + LEVELS[id].name;
+    b.onclick = () => switchTab(i);
+    el.append(b);
+  });
+}
+function switchTab(i) {
+  if (i === tabIndex || i < 0 || i >= LEVEL_ORDER.length) return;
+  tabIndex = i; Sound.ui('move');
+  const id = LEVEL_ORDER[i];
+  if (levelUnlocked(id) && id !== levelId) travelTo(id);
+  else renderCards();
+}
+function travelTo(id) {
+  document.getElementById('travel-msg').textContent = `Flying to ${LEVELS[id].name}…`;
+  state = 'travel'; show('travel');
+  setTimeout(() => { loadLevel(id); startMode(MODES[selIndex]); goSelect(); }, 60);
+}
 function renderCards() {
+  renderTabs();
+  const tabId = LEVEL_ORDER[tabIndex], locked = !levelUnlocked(tabId);
+  document.getElementById('select-title').textContent = locked ? LEVELS[tabId].name : `Choose your lesson · ${LEVELS[levelId].name}`;
+  const lp = document.getElementById('lockpanel'); lp.hidden = !locked;
+  document.getElementById('cards').hidden = locked;
+  if (locked) {
+    const pr = unlockProgress(tabId), from = LEVELS[tabId].unlock.level;
+    lp.innerHTML = `<p class="lockhead">🔒 Locked</p><p>Earn <b>${pr.medal} or better</b> in all four ${pr.from} lessons to unlock. <b>${pr.done} / ${pr.need}</b> so far.</p>
+      <ul class="lockl">${MODES.map(m => { const b = bestOf(from, m), ok = (MEDAL_RANK[(b || {}).medal] || 0) >= MEDAL_RANK[pr.medal];
+        return `<li class="${ok ? 'ok' : ''}">${ok ? '✓' : '·'} ${COURSES_HEARTLAND[m].name}<span>${b && b.medal ? b.medal.toUpperCase() : (b ? 'no medal yet' : 'not flown')}</span></li>`; }).join('')}</ul>`;
+    return;
+  }
   const wrap = document.getElementById('cards'); wrap.innerHTML = '';
   MODES.forEach((m, i) => {
-    const c = COURSES[m], b = best[m];
+    const c = COURSES[m], b = bestOf(levelId, m);
     const el = document.createElement('button'); el.className = 'card' + (i === selIndex ? ' sel' : ''); el.id = 'card-' + m;
     const cv = document.createElement('canvas'); drawSprite(cv, SPRITES[m]);
     el.append(cv);
@@ -1935,7 +2205,7 @@ function openBrief(m) {
   document.getElementById('b-back').onclick = () => goSelect();
   state = 'brief'; show('brief');
 }
-function goSelect() { state = 'select'; renderCards(); show('select'); if (!course) startMode(MODES[selIndex]); }
+function goSelect() { tabIndex = LEVEL_ORDER.indexOf(levelId); state = 'select'; renderCards(); show('select'); if (!course) startMode(MODES[selIndex]); }
 
 function startMode(m) {
   mode = m;
@@ -1947,6 +2217,7 @@ function startMode(m) {
   recStart();
   endTimer = 0; msgs = [];
   buildCourseVisuals(course);
+  showTargetsFor(m);
   for (const k in vehicleModels) vehicleModels[k].visible = k === m;
   vehicle = vehicleModels[m];
   if (vehicle.userData.chute) vehicle.userData.chute.visible = false;
@@ -1982,11 +2253,17 @@ function finishRun() {
 }
 function showResults() {
   const sc = computeScore(course, run);
-  const prevBest = best[mode];
+  const prevBest = bestOf(levelId, mode);
   const isBest = !prevBest || sc.total > prevBest.score;
-  if (isBest) { best[mode] = { score: sc.total, medal: sc.medal }; saveBest(); }
+  const lockedBefore = LEVEL_ORDER.filter(id => !levelUnlocked(id));
+  best[levelId] = best[levelId] || {};
+  const bestMedal = (MEDAL_RANK[sc.medal] || 0) > (MEDAL_RANK[prevBest && prevBest.medal] || 0) ? sc.medal : (prevBest ? prevBest.medal : sc.medal);
+  best[levelId][mode] = { score: isBest ? sc.total : prevBest.score, medal: bestMedal || null };
+  saveBest();
+  const newlyUnlocked = lockedBefore.filter(id => levelUnlocked(id));
   lastResult = sc;
   Sound.medal(sc.medal, run.crashed);
+  if (newlyUnlocked.length) setTimeout(() => Sound.allRings(), 1400);
   const medalHtml = sc.medal ? `<span class="medal ${sc.medal}">${sc.medal.toUpperCase()}</span>` : `<span class="medal none">${run.crashed ? 'CRASHED' : 'NO MEDAL'}</span>`;
   const n = course.rings.length;
   const rows = [
@@ -2009,6 +2286,7 @@ function showResults() {
       <tr class="total"><td>Total ${missed ? `<span class="note">${missed} points left on the table</span>` : '<span class="note">a perfect run!</span>'}</td><td class="pts">${sc.total}<span class="of">/${sc.max}</span></td></tr>
     </table>
     <div class="medalrow">${medalHtml}${isBest ? '<span class="newbest">NEW BEST</span>' : ''}<span class="ladder">${ladder}</span></div>
+    ${newlyUnlocked.map(id => `<div class="unlocked">★ ${LEVELS[id].name.toUpperCase()} UNLOCKED ★<span>Switch levels with L1 / R1 on the lesson screen.</span></div>`).join('')}
     ${!run.crashed && nextMedal ? `<p class="nextmedal">${sc.cutoffs[nextMedal] - sc.total} more points for ${nextMedal}</p>` : ''}
     <div class="row"><button class="btn sel" id="r-retry">✕ Try again</button><button class="btn" id="r-replay">△ Watch replay</button><button class="btn" id="r-menu">○ Choose lesson</button></div>`;
   resultIndex = 0;
@@ -2502,7 +2780,10 @@ function menuInput() {
     if (p.right) { selIndex = (selIndex + 1) % 4; markCards(); }
     if (p.up && selIndex >= 2 && window.innerWidth <= 820) { selIndex -= 2; markCards(); }
     if (p.down && selIndex < 2 && window.innerWidth <= 820) { selIndex += 2; markCards(); }
-    if (p.cross) { Sound.ui('ok'); openBrief(MODES[selIndex]); }
+    const lockedTab = !levelUnlocked(LEVEL_ORDER[tabIndex]);
+    if (p.l1) switchTab(tabIndex - 1);
+    if (p.r1) switchTab(tabIndex + 1);
+    if (p.cross) { if (lockedTab) Sound.ui('back'); else { Sound.ui('ok'); openBrief(MODES[selIndex]); } }
     if (p.circle) { Sound.ui('back'); state = 'title'; show('title'); }
   } else if (state === 'brief') {
     if (p.cross) beginPlay();
@@ -2580,29 +2861,43 @@ function frame(now) {
   } else attractCamera(dt);
   skyDome.position.copy(camera.position);
   const alt = Math.max(0, camera.position.y - 60);
-  scene.fog.near = 700 + alt * 0.9; scene.fog.far = 3300 + alt * 1.2;
+  scene.fog.near = FOG_BASE[0] + alt * 0.9; scene.fog.far = FOG_BASE[1] + alt * 1.2;
   renderer.render(scene, camera);
   Sound.update(dt, state, mode, sim);
   drawHUD(state === 'play' ? dt : 0);
 }
 
 // ===================== BOOT =====================
+// Build (or rebuild) everything that belongs to a level: world, terrain, plants, scenery, sky, vehicle skins.
+function loadLevel(id) {
+  levelId = id; LOOK = LOOKS[id]; SKIN = SKINS[id];
+  W = createWorld(id);
+  scene.remove(levelGroup);
+  levelGroup.traverse(o => { if (o.geometry && !Object.values(BOXG).includes(o.geometry)) o.geometry.dispose(); });
+  levelGroup = new THREE.Group(); scene.add(levelGroup);
+  targetMeshes = [];
+  buildTerrain(); buildTrees(); buildProps(); paintSky(LOOK);
+  for (const k in vehicleModels) scene.remove(vehicleModels[k]);
+  vehicleModels.plane = makeBiplane(SKIN.plane); vehicleModels.glider = makeGlider(SKIN.glider); vehicleModels.jetpack = makeJetpacker(SKIN.jetpack); vehicleModels.skydive = makeSkydiver(SKIN.skydive);
+  vehicleModels.plane.scale.setScalar(1.15);
+  for (const k in vehicleModels) { vehicleModels[k].visible = false; scene.add(vehicleModels[k]); }
+  if (dropPlane) scene.remove(dropPlane);
+  dropPlane = makeBiplane(SKIN.drop); dropPlane.scale.setScalar(1.6); dropPlane.visible = false; scene.add(dropPlane);
+  course = null; rec = null;
+  try { localStorage.setItem('retrowings.level', id); } catch (e) { /* storage unavailable */ }
+}
 async function boot() {
   await new Promise(r => setTimeout(r, 30));
-  W = createWorld();
-  buildTerrain();
-  buildTrees();
-  buildProps();
-  vehicleModels.plane = makeBiplane(); vehicleModels.glider = makeGlider(); vehicleModels.jetpack = makeJetpacker(); vehicleModels.skydive = makeSkydiver();
-  vehicleModels.plane.scale.setScalar(1.15);
-  for (const k in vehicleModels) scene.add(vehicleModels[k]);
-  dropPlane = makeBiplane('#3d7be0', '#f6f1e4', '#e8463a'); dropPlane.scale.setScalar(1.6); dropPlane.visible = false; scene.add(dropPlane);
+  let start = 'heartland';
+  try { const v = localStorage.getItem('retrowings.level'); if (LEVELS[v] && levelUnlocked(v)) start = v; } catch (e) { /* default */ }
+  loadLevel(start);
   shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.35, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
   try { await document.fonts.load('16px Silkscreen'); } catch (e) { /* fallback font */ }
   startMode('plane');
   state = 'title'; show('title');
 }
+
 requestAnimationFrame(frame);
 boot();
 </script>

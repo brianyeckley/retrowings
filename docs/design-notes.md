@@ -15,14 +15,26 @@
 - Jetpack: R2 analog thrust (about half pull hovers) · left stick up/down leans (full forward ≈ 80°, jets pointing back, SNES-style flat-out flight) · left stick left/right turns · fuel gauge.
 - Skydiving: stick half forward = track (fastest forward travel), full forward = dive, back = spread flat (slow), sideways turns · ✕ pulls chute · under canopy forward = dive (fast, steep), back = brake (slow forward, faster sink), pull back just before touchdown to flare. A ground ring shows where the glide lands. HUD cross shows where you'll pass the next ring's height (green = inside the ring).
 
-## Level (one map, all four lessons)
+## Levels
+Each level is a full map with all four lessons, its own look, music and vehicle skins. Data lives in `LEVELS` (terrain function, plant function, courses, unlock rule) on the sim side and in `LOOKS` / `SKINS` on the render side. Unlock rule: silver or better in all four lessons of the previous level. Best score and best medal are saved per level and lesson. Switch levels on the lesson screen with L1 / R1 (Q / E); a locked tab lists progress. Testing aid: add `#unlockall` to the URL.
+
+### Level 1: Heartland
 - Airfield + runway in the middle, river running north–south, lake to the east, mountains north, hills west, farmland and forests.
 - Biplane: 10 rings around the valley; approach from the south over the last ring. Runway is 740 m; touchdown markers sit 330 m in, leaving ~400 m to roll out.
 - Hang glider (easy course): 3 thermals (70 m core, 11.5–13 m/s); 4 rings in calm air at least 250 m from any thermal (150 / 200 / 300 / 60 m up); final leg runs straight home from the west: ring 3 → dive through low ring 4 → bullseye; par 3:20. Design rule for this course: climb in a thermal, then glide out to a ring.
 - Jetpack: 6 low rings over the lake, bullseye landing.
 - Skydiving: drop at 1300 m, 4 freefall rings ~190 m apart vertically, canopy to bullseye.
 
+### Level 2: Red Rock Canyon (unlock: silver in all Heartland lessons)
+- Desert: a winding canyon with stepped red-strata walls, a dry wash floor and a turquoise river channel, terraced mesas and seven freestanding buttes. Juniper, saguaro and sagebrush. Warm sky, "Mesa Sunset" music (A minor, desert guitar arpeggio) in every lesson.
+- Biplane (par 2:50): dirt strip south of the canyon, 9 rings: down into the canyon, along the river, out over the mesa and around a butte, home to the strip.
+- Hang glider (par 4:50): start above the canyon, climb in a canyon thermal, cross the mesa via a second thermal, come back around the big butte, low ring, bullseye on the canyon floor.
+- Jetpack (par 1:50): 6 rings spiral up around a butte; land on the bullseye on its flat summit.
+- Skydiving (par 2:00): drop over the canyon, 4 rings stepping down a diagonal line, canopy onto the bullseye on the mesa top.
+- Skins: teal biplane with wheel spats, terracotta drop plane, purple swept-wing glider, red jetpack suit with gold finned tanks, turquoise skydiver with a purple/yellow/teal canopy.
+
 ## Change log
+- v13: second level, Red Rock Canyon, unlocked by silver or better in all four Heartland lessons. Levels table (terrain, plants, courses, unlock) in the sim; per-level sky, colors, scenery, music and vehicle skins on the render side. Lesson screen gets level tabs (L1 / R1), a lock panel with progress, a "Flying to…" travel screen and an unlock banner on the results screen. Bests saved per level (old saves migrated to Heartland). Only the current lesson's bullseye is drawn. `#unlockall` URL testing aid. CI checks every level's courses (dry starts and landings, rings clear of terrain, flat bullseyes).
 - v12: glider final leg shortened. Ring 3 moves to the far west point (300 m up), ring 4 sits low (60 m) on a straight, tree-free approach 310 m short of the bullseye, so the run home is ring 3 → dive through ring 4 → float onto the target with no doubling back (~50 s, was ~2 min). Ring 2 lowered to 200 m so thermal 2 is needed for ring 3; spare thermal 3 moved near ring 3. Par 3:20.
 - v11: hang glider course re-laid as the easy course: every ring sits in calm air 250–414 m from the nearest thermal (outside lift and inflow), so you climb in a thermal and then glide out to the ring. Ring heights 150 / 300 / 320 / 130 m; ring 4 sits on a long final glide that reaches the bullseye at trim. Thermal tops 400 / 420 / 420 m. Par 3:45. CI checks each thermal's climb rate and that every glider ring is in calm air.
 - v10: replays. Every run is recorded at 30 Hz (vehicle state, stick inputs, ring/landing/crash events) and can be watched from the results screen (△ / R). Playback drives a ghost sim, so models, pilot animation, particles and sound replay as flown. An auto director cuts between chase, flyby, trackside, orbit and sky-cam shots, a ring cam waiting on the far side of upcoming rings, and a landing cam at the touchdown spot for the finish. Letterboxed overlay with a timeline marking rings (white = perfect), landing and crash. Controls: □ cycle camera (Auto/Chase/Flyby/Orbit/Sky), hold R1 3× fast, hold L1 slow-mo, ✕/○ exit.
@@ -39,4 +51,4 @@
 
 ## Ideas for next iterations
 - Save a best-run replay per lesson (ghost to race against).
-- Wind for glider/skydive, more levels, replay camera, invert-look option, rumble/adaptive triggers (Godot can reach DualSense features the browser can't).
+- Wind for glider/skydive, more levels (each with new skins), level select map, invert-look option, rumble/adaptive triggers (Godot can reach DualSense features the browser can't).
