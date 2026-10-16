@@ -69,6 +69,18 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
 .score td { padding: 6px 0; border-bottom: 2px dashed rgba(169,180,214,.35); }
 .score td:last-child { text-align: right; font-family: var(--font-display); font-size: 15px; }
 .score .note { color: var(--muted); font-size: 14px; }
+.score td.pts { white-space: nowrap; vertical-align: top; padding-left: 12px; }
+.score .of { color: var(--muted); font-size: 12px; }
+.score .tick { color: #7ce07a; margin-left: 6px; }
+.score .tip { color: #ffb4a8; font-size: 14px; line-height: 1.3; margin-top: 3px; max-width: 60ch; }
+.score tr.short .pts { color: #ffb4a8; }
+.score tr.total .pts { color: var(--gold); }
+.medalrow { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 12px; }
+.medalrow .medal, .medalrow .newbest { margin: 0; }
+.ladder { display: flex; gap: 8px; margin-left: auto; font-family: var(--font-display); font-size: 12px; letter-spacing: .05em; }
+.ladder .cut { color: var(--muted); border: 2px solid rgba(169,180,214,.35); padding: 3px 6px; }
+.ladder .cut.got { color: var(--cream); border-color: var(--gold); }
+.nextmedal { margin: 8px 0 0; color: var(--cream); font-size: 15px; }
 .score tr.total td { border-bottom: 0; padding-top: 12px; font-size: 20px; color: var(--gold); }
 .medal { font-family: var(--font-display); font-size: 22px; letter-spacing: .1em; padding: 6px 12px; display: inline-block; margin-top: 12px; color: var(--ink); }
 .medal.gold { background: var(--gold); } .medal.silver { background: var(--silver); } .medal.bronze { background: var(--bronze); } .medal.none { background: var(--muted); }
@@ -632,23 +644,40 @@ function landingScore(course, done) {
   const L = course.landing;
   if (L.type === 'runway') {
     const t = done.touch;
-    if (!t) return { pts: 0, note: 'No touchdown recorded' };
+    if (!t) return { pts: 0, note: 'No touchdown recorded', tips: ['Touch down on the runway to score the landing'] };
     const off = segDist(t.x, t.z, L.ax, L.az, L.bx, L.bz);
     const onRunway = off <= L.w / 2 && t.z <= Math.max(L.az, L.bz) && t.z >= Math.min(L.az, L.bz);
-    if (!onRunway) return { pts: 0, note: 'Touched down off the runway' };
+    if (!onRunway) return { pts: 0, note: 'Touched down off the runway', tips: ['Touch down on the runway to score the landing'] };
     const d = Math.abs(t.z - L.markerZ);
     const soft = t.vs < 1.2 ? 1 : t.vs < 2.5 ? 0.8 : 0.6;
-    const pts = Math.round(50 * clamp(1 - d / 220, 0, 1) * soft * (off > 8 ? 0.85 : 1));
+    const center = off > 8 ? 0.85 : 1;
+    const dist = 50 * clamp(1 - d / 220, 0, 1);
+    const pts = Math.round(dist * soft * center);
     const feel = t.vs < 1.2 ? 'butter-smooth' : t.vs < 2.5 ? 'firm' : 'hard';
-    return { pts, note: `${Math.round(d * M_TO_FT)} ft from the marker, ${feel}` };
+    const tips = [];
+    if (Math.round(50 - dist) > 0) tips.push(`−${Math.round(50 - dist)} for distance: full points touching down right at the orange markers`);
+    if (soft < 1) tips.push(`−${Math.round(dist * (1 - soft))} for a ${feel} touchdown (${Math.round(t.vs * M_TO_FT * 60)} ft/min down; butter-smooth is under ${Math.round(1.2 * M_TO_FT * 60)})`);
+    if (center < 1) tips.push(`−${Math.round(dist * soft * (1 - center))} for landing off the centerline`);
+    return { pts, note: `${Math.round(d * M_TO_FT)} ft from the markers, ${feel}`, tips };
   }
   const d = Math.hypot(done.x - L.x, done.z - L.z), s = L.r / 20;
   const zones = [2, 5, 9, 14, 20].map(v => v * s), vals = [50, 40, 30, 20, 10];
-  let pts = 0; for (let i = 0; i < zones.length; i++) if (d <= zones[i]) { pts = vals[i]; break; }
-  let note = pts > 0 ? `${Math.round(d * M_TO_FT)} ft from center` : `Missed the target by ${Math.round((d - L.r) * M_TO_FT)} ft`;
-  const hard = course.key === 'skydive' ? (done.vs > CANOPY.hardSink || done.hs > CANOPY.hardFwd) : (done.vs > 2.6 || (course.key === 'glider' && done.hs > 11));
-  if (hard && pts > 0) { pts = Math.max(0, pts - 10); note += ', hard landing −10'; }
-  return { pts, note };
+  let pts = 0, zone = zones.length; for (let i = 0; i < zones.length; i++) if (d <= zones[i]) { pts = vals[i]; zone = i; break; }
+  const ft = m => Math.round(m * M_TO_FT);
+  let note = pts > 0 ? `${ft(d)} ft from center` : `Missed the target by ${ft(d - L.r)} ft`;
+  const tips = [];
+  if (zone > 0) tips.push(pts > 0
+    ? `−${50 - pts} for distance: the bullseye (inside ${ft(zones[0])} ft) is 50${zone > 1 ? `, the next ring in (inside ${ft(zones[zone - 1])} ft) is ${vals[zone - 1]}` : ''}`
+    : `Land on the target to score: bullseye (inside ${ft(zones[0])} ft) is 50, the outer ring (inside ${ft(zones[4])} ft) is 10`);
+  const sinkMax = course.key === 'skydive' ? CANOPY.hardSink : 2.6;
+  const fwdMax = course.key === 'skydive' ? CANOPY.hardFwd : course.key === 'glider' ? 11 : Infinity;
+  const hard = done.vs > sinkMax || done.hs > fwdMax;
+  if (hard && pts > 0) {
+    pts = Math.max(0, pts - 10); note += ', hard landing';
+    const why = done.vs > sinkMax ? `${Math.round(done.vs * MS_TO_MPH)} mph down (soft is under ${Math.round(sinkMax * MS_TO_MPH)})` : `${Math.round(done.hs * MS_TO_MPH)} mph forward (soft is under ${Math.round(fwdMax * MS_TO_MPH)})`;
+    tips.push(`−10 for a hard landing: ${why}${course.key === 'jetpack' ? '' : '. Flare just before touchdown'}`);
+  }
+  return { pts, note, tips };
 }
 function computeScore(course, run) {
   const ringPts = run.rings * 10, perfectPts = run.perfect * 5;
@@ -659,7 +688,8 @@ function computeScore(course, run) {
   const max = course.rings.length * 15 + 50 + 20;
   const pct = total / max;
   const medal = run.crashed ? null : pct >= 0.85 ? 'gold' : pct >= 0.7 ? 'silver' : pct >= 0.55 ? 'bronze' : null;
-  return { ringPts, perfectPts, landPts, timePts, total, max, medal };
+  const cut = f => Math.ceil(max * f);
+  return { ringPts, perfectPts, landPts, timePts, total, max, medal, over, cutoffs: { gold: cut(0.85), silver: cut(0.7), bronze: cut(0.55) } };
 }
 // ======== SIM END ========
 
@@ -1377,6 +1407,9 @@ function buildCourseVisuals(course) {
     const m = new THREE.Mesh(new THREE.TorusGeometry(r.r, Math.max(0.6, r.r * 0.08), 6, 18), lambert('#ffc93c', { emissive: '#ff9a1a', emissiveIntensity: 0.35, transparent: true }));
     m.position.copy(tv(r.c));
     if (course.def.vertical) m.rotation.x = -Math.PI / 2; else m.lookAt(tv(r.c).add(tv(r.n)));
+    // the perfect-pass zone: a thin white circle at 35% of the ring's radius
+    const core = new THREE.Mesh(new THREE.TorusGeometry(r.r * 0.35, Math.max(0.18, r.r * 0.02), 4, 16), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.75 }));
+    m.add(core); m.userData.core = core;
     courseGroup.add(m); ringMeshes.push(m);
   }
   for (const t of course.thermals) {
@@ -1894,7 +1927,7 @@ function openBrief(m) {
     <p class="goal">${c.goal}</p>
     <dl class="ctrl">${CONTROLS[m].map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('')}</dl>
     <p class="kb">${KEYS[m]}</p>
-    <p class="kb">Scoring: 10 per ring, +5 for a perfect center pass, up to 50 for the landing, up to 20 time bonus (par ${fmtTime(c.par)}).</p>
+    <p class="kb">Scoring: 10 per ring, +5 more for a perfect pass through the small white circle in the middle of a ring, up to 50 for the landing, up to 20 time bonus (par ${fmtTime(c.par)}).</p>
     <div class="row"><button class="btn sel" id="b-go">✕ Fly</button><button class="btn" id="b-back">○ Back</button></div>`;
   document.getElementById('b-go').onclick = () => beginPlay();
   document.getElementById('b-back').onclick = () => goSelect();
@@ -1950,16 +1983,28 @@ function showResults() {
   lastResult = sc;
   Sound.medal(sc.medal, run.crashed);
   const medalHtml = sc.medal ? `<span class="medal ${sc.medal}">${sc.medal.toUpperCase()}</span>` : `<span class="medal none">${run.crashed ? 'CRASHED' : 'NO MEDAL'}</span>`;
+  const n = course.rings.length;
+  const rows = [
+    { label: 'Rings', note: `${run.rings} of ${n} flown through`, got: sc.ringPts, max: n * 10,
+      tips: run.rings < n ? [`−${(n - run.rings) * 10} for ${n - run.rings} missed ring${n - run.rings > 1 ? 's' : ''} (10 each)`] : [] },
+    { label: 'Perfect passes', note: `${run.perfect} of ${n} through the center`, got: sc.perfectPts, max: n * 5,
+      tips: run.perfect < n ? [`−${(n - run.perfect) * 5}: a perfect pass goes through the small white circle in the middle of a ring (+5 each)`] : [] },
+    { label: 'Landing', note: run.landing.note, got: sc.landPts, max: 50,
+      tips: run.crashed ? ['−50: a crash scores no landing or time points'] : (run.landing.tips || []) },
+    { label: 'Time', note: `${fmtTime(run.time)} · par ${fmtTime(course.def.par)}`, got: sc.timePts, max: 20,
+      tips: run.crashed ? ['−20: a crash scores no time bonus'] : sc.timePts < 20 ? [`−${20 - sc.timePts}: ${Math.round(sc.over)} s over par (1 point for every 2 s)`] : [] },
+  ];
+  const missed = sc.max - sc.total;
+  const nextMedal = ['bronze', 'silver', 'gold'].find(m => sc.total < sc.cutoffs[m]);
+  const ladder = ['gold', 'silver', 'bronze'].map(m => `<span class="cut ${sc.total >= sc.cutoffs[m] ? 'got' : ''}">${m[0].toUpperCase() + m.slice(1)} ${sc.cutoffs[m]}</span>`).join('');
   document.getElementById('results').innerHTML = `
     <h2>${course.def.name} results</h2>
     <table class="score">
-      <tr><td>Rings <span class="note">${run.rings} of ${course.rings.length}</span></td><td>${sc.ringPts}</td></tr>
-      <tr><td>Perfect passes <span class="note">${run.perfect}</span></td><td>${sc.perfectPts}</td></tr>
-      <tr><td>Landing <span class="note">${run.landing.note}</span></td><td>${sc.landPts}</td></tr>
-      <tr><td>Time <span class="note">${fmtTime(run.time)} · par ${fmtTime(course.def.par)}</span></td><td>${sc.timePts}</td></tr>
-      <tr class="total"><td>Total <span class="note">out of ${sc.max}</span></td><td>${sc.total}</td></tr>
+      ${rows.map(r => `<tr class="${r.got === r.max ? 'full' : 'short'}"><td><div class="item">${r.label} <span class="note">${r.note}</span></div>${r.tips.map(t => `<div class="tip">${t}</div>`).join('')}</td><td class="pts">${r.got}<span class="of">/${r.max}</span>${r.got === r.max ? '<span class="tick">✓</span>' : ''}</td></tr>`).join('')}
+      <tr class="total"><td>Total ${missed ? `<span class="note">${missed} points left on the table</span>` : '<span class="note">a perfect run!</span>'}</td><td class="pts">${sc.total}<span class="of">/${sc.max}</span></td></tr>
     </table>
-    <div>${medalHtml}${isBest ? '<span class="newbest">NEW BEST</span>' : ''}</div>
+    <div class="medalrow">${medalHtml}${isBest ? '<span class="newbest">NEW BEST</span>' : ''}<span class="ladder">${ladder}</span></div>
+    ${!run.crashed && nextMedal ? `<p class="nextmedal">${sc.cutoffs[nextMedal] - sc.total} more points for ${nextMedal}</p>` : ''}
     <div class="row"><button class="btn sel" id="r-retry">✕ Try again</button><button class="btn" id="r-menu">○ Choose lesson</button></div>`;
   resultIndex = 0;
   document.getElementById('r-retry').onclick = () => { startMode(mode); beginPlay(); };
@@ -2292,8 +2337,8 @@ function frame(now) {
   const nextIdx = course.rings.findIndex(r => !r.done);
   ringMeshes.forEach((m, i) => {
     const r = course.rings[i];
-    if (r.done) { m.material.opacity = Math.max(0, m.material.opacity - dt * 1.5); m.scale.multiplyScalar(1 + dt * 0.8); m.visible = m.material.opacity > 0.01; }
-    else { m.material.opacity = 1; m.material.emissiveIntensity = i === nextIdx ? 0.45 + 0.4 * Math.sin(tnow * 6) : 0.12; m.material.color.set(i === nextIdx ? '#ffc93c' : '#d9a53a'); }
+    if (r.done) { m.material.opacity = Math.max(0, m.material.opacity - dt * 1.5); m.userData.core.material.opacity = m.material.opacity * 0.75; m.scale.multiplyScalar(1 + dt * 0.8); m.visible = m.material.opacity > 0.01; }
+    else { m.material.opacity = 1; m.userData.core.material.opacity = i === nextIdx ? 0.85 : 0.45; m.material.emissiveIntensity = i === nextIdx ? 0.45 + 0.4 * Math.sin(tnow * 6) : 0.12; m.material.color.set(i === nextIdx ? '#ffc93c' : '#d9a53a'); }
   });
   if (beacon) beacon.material.opacity = nextIdx === -1 ? 0.3 + 0.12 * Math.sin(tnow * 4) : 0.1;
   for (const fx of thermalFx) {
