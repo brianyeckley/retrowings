@@ -234,12 +234,12 @@ const COURSES = {
     landing: { type: 'runway', ax: -150, az: 760, bx: -150, bz: 20, w: 30, markerZ: 430 },
   },
   glider: {
-    name: 'Hang Glider', short: 'HANG GLIDER', par: 270, ringR: 16,
+    name: 'Hang Glider', short: 'HANG GLIDER', par: 210, ringR: 16,
     desc: 'Ride the thermals up to the high rings, then hit the bullseye.',
     goal: 'Ride rising thermals (look for the sparkles) to climb to the high rings, then glide down and land on the bullseye. Flare with ✕ just before touchdown.',
     spawn: { x: -800, z: 950, agl: 170, speed: 14 },
     rings: [[-830, 700, 140], [-1020, 380, 360], [-950, -120, 470], [-600, -360, 300]],
-    thermals: [{ x: -820, z: 610, r: 55, lift: 6.5, top: 520 }, { x: -1080, z: 150, r: 55, lift: 7, top: 600 }, { x: -760, z: -330, r: 55, lift: 6, top: 500 }],
+    thermals: [{ x: -820, z: 610, r: 70, lift: 12, top: 520 }, { x: -1080, z: 150, r: 70, lift: 13, top: 600 }, { x: -760, z: -330, r: 70, lift: 11.5, top: 500 }],
     landing: { type: 'target', x: -450, z: -150, r: 20 },
   },
   jetpack: {
@@ -334,13 +334,26 @@ function createWorld() {
     }
     return false;
   };
+  // Thermals: full lift across the core (radius r), fading out to 2.4 r, and tapering off near the top.
+  const thermalShape = (t, p, d) => smoothstep(t.r * 2.4, t.r, d) * smoothstep(t.ceil + 40, t.ceil - 60, p.y);
   W.thermalLift = (p) => {
     let l = 0;
     for (const t of W.thermals) {
       const d = Math.hypot(p.x - t.x, p.z - t.z);
-      if (d < t.r * 2.2) l += t.lift * smoothstep(t.r * 2.2, t.r * 0.8, d) * smoothstep(t.ceil + 40, t.ceil - 60, p.y);
+      if (d < t.r * 2.4) l += t.lift * thermalShape(t, p, d);
     }
     return l;
+  };
+  // Inflow: air drifts in toward a thermal's core, so a circling glider is gently drawn to the strongest lift.
+  W.thermalInflow = (p) => {
+    const v = new V3();
+    for (const t of W.thermals) {
+      const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz);
+      if (d < 1 || d > t.r * 3) continue;
+      const k = 3.0 * smoothstep(t.r * 3, t.r * 0.6, d) * smoothstep(t.ceil + 40, t.ceil - 60, p.y) * Math.min(1, d / (t.r * 0.6));
+      v.x += dx / d * k; v.z += dz / d * k;
+    }
+    return v;
   };
   return W;
 }
@@ -452,7 +465,7 @@ class PlaneSim {
   hud() { return { speed: this.vel.len(), vs: this.vel.y, agl: this.agl, throttle: this.throttle }; }
 }
 
-const GLIDER_FEET = 1.5;
+const GLIDER_FEET = 2.45;
 class GliderSim {
   constructor(W) { this.W = W; }
   reset(sp) {
@@ -476,7 +489,8 @@ class GliderSim {
     const sink = 0.55 + (1 / Math.cos(this.phi) - 1) * 2.2 + Math.max(0, 8 - this.v) * (this.flare ? 0.35 : 1.4);
     this.lift = this.W.thermalLift(this.pos);
     const hs = this.v * Math.cos(this.theta), f = fwdOfYaw(this.psi);
-    this.vel.set(f.x * hs, this.v * Math.sin(this.theta) - sink + this.lift, f.z * hs);
+    const inflow = this.W.thermalInflow(this.pos);
+    this.vel.set(f.x * hs + inflow.x, this.v * Math.sin(this.theta) - sink + this.lift, f.z * hs + inflow.z);
     this.pos.addS(this.vel, dt);
     this.q = Quat.ypr(this.psi, this.theta, -this.phi);
     const gy = this.W.groundAt(this.pos.x, this.pos.z);
@@ -546,7 +560,7 @@ class JetpackSim {
   hud() { return { speed: this.vel.len(), vs: this.vel.y, agl: this.agl, thrust: this.thrust, fuel: this.fuel }; }
 }
 
-const DIVER_FEET = 0.95;
+const DIVER_FEET = 1.02;
 class SkydiveSim {
   constructor(W) { this.W = W; }
   reset(sp) {
@@ -845,8 +859,102 @@ function makeBiplane(body = '#d8362b', wing = '#f2c53d') {
   g.userData.prop = prop;
   return g;
 }
+// ---------- pilots: a jointed rig shared by the glider, jetpack and skydiving lessons ----------
+// Joints are Groups; limbs hang down their joint's -Y. Root origin is at the hips, the pilot faces -Z.
+const MATS = {};
+const mat = c => MATS[c] || (MATS[c] = lambert(c));
+const BOXG = {};
+const boxGeo = (w, h, d) => { const k = `${w},${h},${d}`; return BOXG[k] || (BOXG[k] = new THREE.BoxGeometry(w, h, d)); };
+const part = (parent, w, h, d, c, x, y, z) => { const m = new THREE.Mesh(boxGeo(w, h, d), typeof c === 'string' ? mat(c) : c); m.position.set(x, y, z); parent.add(m); return m; };
+const joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
+const ARM = { a: 0.3, b: 0.31 };   // upper arm and forearm-to-hand lengths, for IK
+const V3T = (x, y, z) => new THREE.Vector3(x, y, z);
+const DOWN = V3T(0, -1, 0);
+
+function makePilot(o) {
+  const root = new THREE.Group(), j = {};
+  // hips, belt and buckle
+  part(root, 0.34, 0.2, 0.22, o.suit, 0, -0.02, 0);
+  part(root, 0.36, 0.06, 0.24, o.belt, 0, 0.08, 0);
+  part(root, 0.08, 0.05, 0.02, '#d9a53a', 0, 0.08, -0.125);
+  // torso: abdomen, chest, contrasting shoulder yoke and zipper stripe
+  j.spine = joint(root, 0, 0.1, 0);
+  part(j.spine, 0.31, 0.2, 0.2, o.suit, 0, 0.1, 0);
+  part(j.spine, 0.42, 0.26, 0.25, o.suit, 0, 0.3, 0);
+  part(j.spine, 0.44, 0.07, 0.26, o.accent, 0, 0.41, 0);
+  part(j.spine, 0.05, 0.22, 0.01, o.accent, 0, 0.27, -0.128);
+  // neck and head: face, nose, ears, helmet shell with a ridge, goggles with tinted lenses
+  j.neck = joint(j.spine, 0, 0.44, 0);
+  part(j.neck, 0.1, 0.09, 0.1, o.skin, 0, 0.04, 0);
+  j.head = joint(j.neck, 0, 0.08, 0);
+  part(j.head, 0.22, 0.24, 0.23, o.skin, 0, 0.12, 0);
+  part(j.head, 0.04, 0.05, 0.04, o.skin, 0, 0.1, -0.13);
+  part(j.head, 0.08, 0.025, 0.02, '#b5654a', 0, 0.04, -0.118);
+  for (const s of [-1, 1]) part(j.head, 0.03, 0.06, 0.05, o.skin, s * 0.12, 0.12, 0.01);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.55), mat(o.helmet));
+  helmet.position.set(0, 0.14, 0.01); helmet.scale.set(1, 1.05, 1.08); j.head.add(helmet);
+  part(j.head, 0.05, 0.03, 0.27, o.accent, 0, 0.285, 0.01);
+  part(j.head, 0.245, 0.05, 0.245, '#262a35', 0, 0.17, 0.005);
+  for (const s of [-1, 1]) part(j.head, 0.075, 0.055, 0.02, lambert('#7fd3ff', { emissive: '#2a6f9a', emissiveIntensity: 0.6 }), s * 0.055, 0.17, -0.125);
+  // arms: shoulder pad, upper arm, elbow, forearm, cuff, glove
+  for (const s of [-1, 1]) {
+    const k = s < 0 ? 'L' : 'R';
+    part(j.spine, 0.13, 0.09, 0.17, o.accent, s * 0.25, 0.42, 0);
+    const sh = j['sh' + k] = joint(j.spine, s * 0.25, 0.38, 0);
+    part(sh, 0.11, 0.3, 0.12, o.suit, 0, -0.15, 0);
+    const el = j['el' + k] = joint(sh, 0, -0.3, 0);
+    part(el, 0.1, 0.24, 0.11, o.suit, 0, -0.12, 0);
+    part(el, 0.12, 0.05, 0.13, o.glove, 0, -0.24, 0);
+    part(el, 0.09, 0.1, 0.11, o.glove, 0, -0.31, 0);
+    part(el, 0.03, 0.06, 0.04, o.glove, s * -0.05, -0.29, -0.04);   // thumb
+  }
+  // legs: thigh, knee pad, shin, boot with sole
+  for (const s of [-1, 1]) {
+    const k = s < 0 ? 'L' : 'R';
+    const hip = j['hip' + k] = joint(root, s * 0.1, -0.08, 0);
+    part(hip, 0.15, 0.4, 0.16, o.legs || o.suit, 0, -0.2, 0);
+    const kn = j['kn' + k] = joint(hip, 0, -0.41, 0);
+    part(kn, 0.12, 0.08, 0.04, o.accent, 0, -0.02, -0.08);
+    part(kn, 0.13, 0.4, 0.14, o.legs || o.suit, 0, -0.2, 0);
+    const an = j['an' + k] = joint(kn, 0, -0.42, 0);
+    part(an, 0.14, 0.11, 0.26, o.boot, 0, -0.04, -0.05);
+    part(an, 0.15, 0.03, 0.27, '#1a1d26', 0, -0.1, -0.05);
+  }
+  return { root, j };
+}
+// Set a joint's rotation; side s (-1 left, +1 right) mirrors the y and z angles.
+const rot = (g, x, y, z, s = 1) => g.rotation.set(x, y * s, z * s);
+// Two-bone IK: place the shoulder and elbow so the hand reaches `target` (in the shoulder's parent space).
+// `pole` (also parent space) says which way the elbow points.
+function reach(sh, el, target, pole) {
+  const S = sh.position, toT = target.clone().sub(S);
+  const n = toT.clone().normalize();
+  const d = clamp(toT.length(), 0.05, ARM.a + ARM.b - 0.002);
+  const m = pole.clone().sub(n.clone().multiplyScalar(pole.dot(n))).normalize();
+  const cosA = clamp((ARM.a * ARM.a + d * d - ARM.b * ARM.b) / (2 * ARM.a * d), -1, 1);
+  const u = n.clone().multiplyScalar(cosA).add(m.multiplyScalar(Math.sqrt(1 - cosA * cosA)));
+  const elbow = S.clone().add(u.clone().multiplyScalar(ARM.a));
+  const f = S.clone().add(n.multiplyScalar(d)).sub(elbow).normalize();
+  sh.quaternion.setFromUnitVectors(DOWN, u);
+  el.quaternion.setFromUnitVectors(DOWN, f.applyQuaternion(sh.quaternion.clone().invert()));
+}
+// World-space point → a joint's local space (matrices must be current).
+const toLocal = (obj, world) => obj.worldToLocal(world.clone());
+// A thin rod between two points, re-aimed every frame (glider hang strap).
+function aimRod(mesh, a, b) {
+  const d = b.clone().sub(a), len = d.length();
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);
+  mesh.scale.set(1, Math.max(0.01, len), 1);
+  mesh.quaternion.setFromUnitVectors(V3T(0, 1, 0), d.normalize());
+}
+function rod(parent, a, b, r, c) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 6), mat(c));
+  aimRod(m, a, b); parent.add(m); return m;
+}
+
 function makeGlider() {
   const g = new THREE.Group();
+  // sail
   const geo = new THREE.BufferGeometry();
   const nose = [0, 0.35, -2.4], lt = [-5.2, 0, 1.3], rt = [5.2, 0, 1.3], tail = [0, 0.15, 0.9], ml = [-2.4, 0.2, -0.4], mr = [2.4, 0.2, -0.4];
   const v = [...nose, ...ml, ...tail, ...ml, ...lt, ...tail, ...nose, ...tail, ...mr, ...mr, ...tail, ...rt];
@@ -856,73 +964,73 @@ function makeGlider() {
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cs, 3));
   geo.computeVertexNormals();
   g.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
-  box(0.08, 1.7, 0.08, '#262a35', -0.6, -0.8, -0.3, g).rotation.z = 0.35;
-  box(0.08, 1.7, 0.08, '#262a35', 0.6, -0.8, -0.3, g).rotation.z = -0.35;
-  box(1.6, 0.08, 0.08, '#262a35', 0, -1.6, -0.3, g);
-  box(0.45, 0.4, 1.8, '#2f8f5b', 0, -1.25, 0.35, g);
-  box(0.34, 0.34, 0.34, '#f0b98a', 0, -1.2, -0.7, g);
-  box(0.38, 0.16, 0.38, '#ffffff', 0, -1.03, -0.7, g);
+  // keel, A-frame and basebar
+  const top = V3T(0, 0.18, -0.35), bl = V3T(-0.8, -1.75, -1.0), br = V3T(0.8, -1.75, -1.0);
+  rod(g, V3T(0, 0.22, -2.2), V3T(0, 0.18, 0.9), 0.035, '#9aa3b5');
+  rod(g, top, bl, 0.03, '#9aa3b5'); rod(g, top, br, 0.03, '#9aa3b5'); rod(g, bl, br, 0.03, '#d4dbe4');
+  for (const p of [bl, br]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.05, 8), mat('#262a35')); w.rotation.z = Math.PI / 2; w.position.copy(p); g.add(w); }
+  // pilot in a green harness, hanging prone from a strap
+  const rig = makePilot({ suit: '#2f8f5b', legs: '#2d3348', accent: '#ffc93c', belt: '#262a35', helmet: '#ff8a2a', glove: '#262a35', boot: '#5a3b26', skin: '#f0b98a' });
+  part(rig.j.spine, 0.46, 0.5, 0.3, '#246f47', 0, 0.22, 0.03);           // harness
+  part(rig.j.spine, 0.12, 0.3, 0.06, '#d9a53a', 0, 0.25, 0.2);            // reserve parachute pouch
+  g.add(rig.root);
+  const strap = rod(g, V3T(0, 0.2, -0.2), V3T(0, -1.1, -0.3), 0.02, '#262a35');
+  g.userData = { rig, strap, top, bl, br, st: { upright: 0, shift: 0, push: 0, run: 0 } };
   return g;
 }
-function makePerson(suit) {
-  const g = new THREE.Group(); // origin near the hips
-  const legs = [box(0.22, 0.85, 0.25, '#2d3348', -0.14, -0.5, 0, g), box(0.22, 0.85, 0.25, '#2d3348', 0.14, -0.5, 0, g)];
-  box(0.55, 0.68, 0.32, suit, 0, 0.25, 0, g);
-  box(0.32, 0.32, 0.32, '#f0b98a', 0, 0.78, 0, g);
-  box(0.36, 0.18, 0.36, '#ffffff', 0, 0.95, 0, g);
-  const arms = [];
-  for (const sx of [-1, 1]) {
-    const pivot = new THREE.Group(); pivot.position.set(sx * 0.36, 0.52, 0);
-    box(0.16, 0.62, 0.18, suit, 0, -0.31, 0, pivot); g.add(pivot); arms.push(pivot);
-  }
-  g.userData.arms = arms; g.userData.legs = legs;
-  return g;
-}
+
 function makeJetpacker() {
-  const g = makePerson('#3d7be0');
-  const metal = lambert('#d4dbe4'), dark = lambert('#2a2f3c'), brass = lambert('#d9a53a'), red = lambert('#e8463a');
-  const cyl = (r1, r2, h, mat, x, y, z, seg = 10, parent = g) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg), mat); m.position.set(x, y, z); parent.add(m); return m; };
-  const ball = (r, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 6), mat); m.position.set(x, y, z); g.add(m); return m; };
-  // helmet visor, gloves, boots
-  box(0.3, 0.1, 0.04, '#141c38', 0, 0.8, -0.17, g);
-  for (const sx of [-0.14, 0.14]) box(0.25, 0.14, 0.32, '#1f2433', sx, -0.92, -0.03, g);
-  // harness straps and back corset
-  for (const sx of [-0.15, 0.15]) box(0.06, 0.66, 0.34, '#262a35', sx, 0.26, 0, g);
-  box(0.58, 0.08, 0.36, '#262a35', 0, 0.0, 0, g);
-  box(0.46, 0.55, 0.06, dark, 0, 0.3, 0.2, g);
-  // twin fuel tanks with domed caps + center nitrogen bottle
+  const g = new THREE.Group();
+  const rig = makePilot({ suit: '#3d7be0', accent: '#ffc93c', belt: '#262a35', helmet: '#f6f1e4', glove: '#262a35', boot: '#262a35', skin: '#f0b98a' });
+  g.add(rig.root);
+  const sp = rig.j.spine, y0 = -0.1;   // rocket belt parts are placed relative to the hips; the spine joint sits 0.1 up
+  const metal = mat('#d4dbe4'), dark = mat('#2a2f3c'), brass = mat('#d9a53a'), red = mat('#e8463a');
+  const cyl = (r1, r2, h, m, x, y, z, seg = 10, parent = sp) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg), m); c.position.set(x, y + (parent === sp ? y0 : 0), z); parent.add(c); return c; };
+  const ball = (r, m, x, y, z) => { const c = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 6), m); c.position.set(x, y + y0, z); sp.add(c); return c; };
+  // harness straps, back plate
+  for (const sx of [-0.15, 0.15]) part(sp, 0.06, 0.6, 0.29, '#262a35', sx, 0.3 + y0, 0);
+  part(sp, 0.46, 0.55, 0.06, dark, 0, 0.3 + y0, 0.16);
+  // twin fuel tanks with domed caps, red bands, nitrogen bottle
   for (const sx of [-0.15, 0.15]) {
-    cyl(0.12, 0.12, 0.5, metal, sx, 0.33, 0.33);
-    ball(0.12, metal, sx, 0.58, 0.33); ball(0.12, metal, sx, 0.08, 0.33);
-    box(0.25, 0.03, 0.26, '#e8463a', sx, 0.42, 0.33, g);
+    cyl(0.12, 0.12, 0.5, metal, sx, 0.33, 0.3);
+    ball(0.12, metal, sx, 0.58, 0.3); ball(0.12, metal, sx, 0.08, 0.3);
+    part(sp, 0.25, 0.03, 0.26, red, sx, 0.42 + y0, 0.3);
   }
-  cyl(0.065, 0.065, 0.48, red, 0, 0.32, 0.47, 8);
-  ball(0.065, red, 0, 0.56, 0.47);
-  // gas generator + manifold arching over the shoulders
-  ball(0.09, brass, 0, 0.72, 0.33);
-  const bar = cyl(0.045, 0.045, 0.78, brass, 0, 0.72, 0.3, 8); bar.rotation.z = Math.PI / 2;
-  const flameCore = [], flames = [];
+  cyl(0.065, 0.065, 0.48, red, 0, 0.32, 0.44, 8);
+  ball(0.065, red, 0, 0.56, 0.44);
+  // gas generator and manifold arching over the shoulders, down-pipes to bell nozzles
+  ball(0.09, brass, 0, 0.72, 0.3);
+  const bar = cyl(0.045, 0.045, 0.78, brass, 0, 0.72, 0.27, 8); bar.rotation.z = Math.PI / 2;
+  const flameCore = [], flames = [], grips = [];
   for (const sx of [-1, 1]) {
-    ball(0.06, brass, sx * 0.39, 0.72, 0.3);
-    cyl(0.045, 0.045, 0.62, brass, sx * 0.4, 0.4, 0.27, 8);                     // down-pipe
-    cyl(0.06, 0.11, 0.2, dark, sx * 0.4, 0.02, 0.25, 10);                       // bell nozzle
-    // control arms from the hips with hand grips
-    box(0.05, 0.05, 0.42, '#3a3f4f', sx * 0.36, -0.02, -0.16, g);
-    cyl(0.04, 0.04, 0.14, red, sx * 0.36, 0.03, -0.38, 6);
-    // layered flame: orange outer, yellow core
+    ball(0.06, brass, sx * 0.39, 0.72, 0.27);
+    cyl(0.045, 0.045, 0.62, brass, sx * 0.4, 0.4, 0.24, 8);
+    cyl(0.06, 0.11, 0.2, dark, sx * 0.4, 0.02, 0.22, 10);
     const outer = new THREE.Mesh(new THREE.ConeGeometry(0.11, 1, 6), new THREE.MeshBasicMaterial({ color: '#ff7a1a', transparent: true, opacity: 0.85 }));
-    outer.geometry.rotateX(Math.PI); outer.geometry.translate(0, -0.5, 0);   // wide end at the nozzle
-    outer.position.set(sx * 0.4, -0.08, 0.25); g.add(outer); flames.push(outer);
+    outer.geometry.rotateX(Math.PI); outer.geometry.translate(0, -0.5, 0);
+    outer.position.set(sx * 0.4, -0.08 + y0, 0.22); sp.add(outer); flames.push(outer);
     const core = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.7, 6), new THREE.MeshBasicMaterial({ color: '#fff3a0' }));
     core.geometry.rotateX(Math.PI); core.geometry.translate(0, -0.35, 0);
-    core.position.set(sx * 0.4, -0.08, 0.25); g.add(core); flameCore.push(core);
+    core.position.set(sx * 0.4, -0.08 + y0, 0.22); sp.add(core); flameCore.push(core);
+    // control arms swing forward from the hips; the hands hold the red grips
+    part(rig.root, 0.05, 0.05, 0.36, '#3a3f4f', sx * 0.3, 0.08, -0.14);
+    const grip = cyl(0.04, 0.04, 0.14, red, sx * 0.3, 0.1, -0.34, 6, rig.root);
+    grips.push(grip);
   }
-  g.userData.flames = flames; g.userData.flameCore = flameCore;
+  g.userData = { rig, flames, flameCore, grips, st: { lean: 0 } };
   return g;
 }
+
 function makeSkydiver() {
-  const g = makePerson('#e8463a');
-  box(0.44, 0.5, 0.2, '#262a35', 0, 0.3, 0.26, g);
+  const g = new THREE.Group();
+  const rig = makePilot({ suit: '#e8463a', accent: '#f6f1e4', belt: '#262a35', helmet: '#262a35', glove: '#262a35', boot: '#262a35', skin: '#f0b98a' });
+  g.add(rig.root);
+  const sp = rig.j.spine;
+  part(sp, 0.38, 0.46, 0.17, '#262a35', 0, 0.22, 0.2);     // parachute container
+  part(sp, 0.3, 0.07, 0.03, '#ffc93c', 0, 0.36, 0.29);
+  part(sp, 0.08, 0.04, 0.04, '#ffc93c', 0.1, 0.0, 0.25);   // pilot-chute handle
+  for (const sx of [-0.13, 0.13]) part(sp, 0.06, 0.48, 0.28, '#262a35', sx, 0.24, 0.02);
+  // canopy, with risers from the shoulders and steering toggles the hands pull down
   const chute = new THREE.Group();
   const cells = 7, span = 7.4;
   for (let i = 0; i < cells; i++) {
@@ -932,12 +1040,133 @@ function makeSkydiver() {
   }
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const line = box(0.03, 1, 0.03, '#262a35', 0, 0, 0, chute);
-    const a = new THREE.Vector3(sx * 0.25, 0.5, 0), b = new THREE.Vector3(sx * 3.3, 5.4, sz * 1.2);
+    const a = V3T(sx * 0.24, 0.6, 0), b = V3T(sx * 3.3, 5.4, sz * 1.2);
     line.position.copy(a).add(b).multiplyScalar(0.5); line.scale.y = a.distanceTo(b);
-    line.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+    line.quaternion.setFromUnitVectors(V3T(0, 1, 0), b.clone().sub(a).normalize());
   }
-  chute.visible = false; g.add(chute); g.userData.chute = chute;
+  const toggleLines = [-1, 1].map(sx => rod(chute, V3T(sx * 0.3, 1.0, 0), V3T(sx * 3.5, 5.4, 1.3), 0.012, '#f6f1e4'));
+  chute.visible = false; g.add(chute);
+  g.userData = { rig, chute, toggleLines, st: {} };
   return g;
+}
+
+// ---------- pilot animation ----------
+const lerpN = (a, b, t) => a + (b - a) * t;
+const wave = (t, f, ph = 0) => Math.sin(t * f + ph);
+function standPose(j) { for (const n of ['spine', 'neck', 'hipL', 'hipR', 'knL', 'knR', 'anL', 'anR']) j[n].rotation.set(0, 0, 0); }
+
+function animateGlider(dt, t) {
+  const ud = vehicle.userData, { j, root } = ud.rig, st = ud.st, inp = state === 'play' ? Input.s : {};
+  const landed = sim.done && sim.done.type === 'landed';
+  st.upright = damp(st.upright, (sim.flare || sim.agl < 6 || landed) ? 1 : 0, 3, dt);
+  st.shift = damp(st.shift, sim.done ? 0 : (inp.lx || 0), 5, dt);     // weight-shift toward the turn
+  st.push = damp(st.push, sim.done ? 0 : (inp.ly || 0), 4, dt);       // push the bar out to slow, pull in to dive
+  const u = st.upright, onGround = sim.agl < 0.6 || landed;
+  st.run = damp(st.run, onGround && !landed ? 1 : 0, 6, dt);
+  // body: prone under the wing in flight, swinging upright to land
+  root.position.set(st.shift * 0.28 * (1 - u), lerpN(-1.3, -1.45, u), lerpN(-0.15 + st.push * 0.14, -0.28, u));
+  root.rotation.set(lerpN(-Math.PI / 2 + 0.06, -0.12, u), 0, -st.shift * 0.18 * (1 - u));
+  rot(j.spine, lerpN(0.08, 0, u), 0, 0);
+  rot(j.neck, lerpN(0.95, 0.05, u), -st.shift * 0.25, 0);
+  // legs: trailing behind in a relaxed kick while prone, hanging or running when upright
+  for (const s of [-1, 1]) {
+    const k = s < 0 ? 'L' : 'R', ph = s < 0 ? 0 : Math.PI;
+    const sway = wave(t, 1.6, ph) * 0.07;
+    let hx = lerpN(0.12 + sway, 0.25, u), kx = lerpN(-0.35 - sway, -0.35, u), ax = lerpN(-0.45, 0, u);
+    if (st.run > 0.01) { hx = lerpN(hx, wave(t, 11, ph) * 0.7 + 0.15, st.run); kx = lerpN(kx, -0.6 - wave(t, 11, ph + 1.2) * 0.5, st.run); }
+    if (landed) { hx = 0; kx = 0; ax = 0; }
+    rot(j['hip' + k], hx, 0, 0.06, s); rot(j['kn' + k], kx, 0, 0, s); rot(j['an' + k], ax, 0, 0, s);
+  }
+  // hands on the basebar (prone) or the downtubes (upright)
+  vehicle.updateMatrixWorld(true);
+  for (const s of [-1, 1]) {
+    const k = s < 0 ? 'L' : 'R', side = s < 0 ? ud.bl : ud.br;
+    const onBar = V3T(s * 0.34, side.y, side.z);
+    const onTube = ud.top.clone().lerp(side, 0.55);
+    const target = vehicle.localToWorld(onBar.lerp(onTube, u));
+    const pole = V3T(s, lerpN(0, -0.3, u), lerpN(0.7, 0.6, u));
+    reach(j['sh' + k], j['el' + k], toLocal(j.spine, target), pole);
+  }
+  // hang strap from the keel to the harness
+  vehicle.updateMatrixWorld(true);
+  aimRod(ud.strap, V3T(0, 0.18, -0.2), vehicle.worldToLocal(j.spine.localToWorld(V3T(0, 0.3, 0.17))));
+}
+
+function animateJetpack(dt, t) {
+  const ud = vehicle.userData, { j } = ud.rig, st = ud.st, inp = state === 'play' ? Input.s : {};
+  const lean = clamp(sim.leanF / (80 * DEG), -0.4, 1), th = sim.thrust;
+  st.lean = damp(st.lean, lean, 6, dt);
+  const grounded = sim.onGround;
+  rot(j.spine, 0, 0, (Math.random() - 0.5) * 0.025 * th);
+  rot(j.neck, 0.12 + Math.max(0, st.lean) * 0.95, -(inp.lx || 0) * 0.35, 0);
+  for (const s of [-1, 1]) {
+    const k = s < 0 ? 'L' : 'R', ph = s < 0 ? 0 : 2.1;
+    if (grounded) { rot(j['hip' + k], 0, 0, 0.03, s); rot(j['kn' + k], 0, 0, 0, s); rot(j['an' + k], 0, 0, 0, s); continue; }
+    // dangling legs that bend for a landing and stream out straight behind when flying flat out
+    const brace = sim.agl < 3 && sim.vel.y < -0.5 ? 1 : 0;
+    const flat = Math.max(0, st.lean);
+    const sway = wave(t, 2.3, ph) * 0.06 * (1 - flat);
+    rot(j['hip' + k], lerpN(0.22 + sway + brace * 0.3, -0.05, flat), 0, 0.07 + wave(t, 1.7, ph) * 0.03, s);
+    rot(j['kn' + k], lerpN(-0.45 - sway - brace * 0.4, -0.08, flat), 0, 0, s);
+    rot(j['an' + k], lerpN(-0.25, -0.6, flat), 0, 0, s);
+  }
+  vehicle.updateMatrixWorld(true);
+  ud.grips.forEach((grip, i) => {
+    const s = i ? 1 : -1, k = i ? 'R' : 'L';
+    reach(j['sh' + k], j['el' + k], toLocal(j.spine, grip.getWorldPosition(V3T(0, 0, 0)).add(V3T(0, 0.05, 0))), V3T(s * 0.6, 0, 1));
+  });
+}
+
+function animateSkydiver(dt, t) {
+  const ud = vehicle.userData, { j, root } = ud.rig, inp = state === 'play' ? Input.s : {};
+  const landed = sim.done && sim.done.type === 'landed';
+  const free = sim.phase === 'free' && !sim.done;
+  ud.chute.visible = sim.phase !== 'free';
+  if (ud.chute.visible) { const o = sim.open; ud.chute.scale.set(0.3 + 0.7 * o, 0.2 + 0.8 * o, 0.3 + 0.7 * o); }
+  root.rotation.set(0, 0, 0);
+  if (free) {
+    // box position when stable, arms swept back in a head-down dive, spread wide to slow down
+    const a = sim.alpha / DEG;
+    const dive = clamp((a - 15) / 55, 0, 1), spread = clamp((15 - a) / 25, 0, 1);
+    const flut = Math.min(1, sim.vel.len() / 50) * 0.05;
+    rot(j.spine, lerpN(-0.18, 0, dive), 0, -(inp.lx || 0) * 0.15);
+    rot(j.neck, lerpN(0.75, 0.15, dive), 0, 0);
+    for (const s of [-1, 1]) {
+      const k = s < 0 ? 'L' : 'R', ph = s < 0 ? 0 : 1.7;
+      const abd = lerpN(lerpN(1.35, 1.75, spread), 0.28, dive), bend = lerpN(lerpN(1.25, 0.55, spread), 0.08, dive);
+      rot(j['sh' + k], lerpN(0, -0.35, dive), 0, abd + wave(t, 17, ph) * flut, s);
+      rot(j['el' + k], 0, 0, bend + wave(t, 21, ph) * flut, s);
+      rot(j['hip' + k], lerpN(-0.15, 0, dive), 0, lerpN(lerpN(0.35, 0.55, spread), 0.05, dive), s);
+      rot(j['kn' + k], lerpN(lerpN(-1.3, -0.95, spread), -0.12, dive) + wave(t, 19, ph) * flut, 0, 0, s);
+      rot(j['an' + k], -0.4, 0, 0, s);
+    }
+    return;
+  }
+  // under canopy: hands up on the steering toggles, legs dangling and swinging
+  const flare = !sim.done && sim.agl < 6 ? clamp((6 - sim.agl) / 4, 0, 1) : 0;
+  const brake = Math.max(0, inp.ly || 0);
+  rot(j.spine, 0, 0, 0);
+  rot(j.neck, landed ? 0 : -0.25, 0, 0);
+  for (const s of [-1, 1]) {
+    const k = s < 0 ? 'L' : 'R', ph = s < 0 ? 0 : 0.6;
+    if (landed) { rot(j['hip' + k], 0, 0, 0.04, s); rot(j['kn' + k], 0, 0, 0, s); rot(j['an' + k], 0, 0, 0, s); }
+    else {
+      const swing = wave(t, 1.4, ph) * 0.12 * (1 - flare);
+      rot(j['hip' + k], lerpN(0.18 + swing, 0.4, flare), 0, lerpN(0.12, 0.02, flare), s);
+      rot(j['kn' + k], lerpN(-0.3 - swing * 0.5, -0.25, flare), 0, 0, s);
+      rot(j['an' + k], -0.35, 0, 0, s);
+    }
+    const turn = Math.max(0, s * (inp.lx || 0));
+    const pull = clamp(turn + brake + flare, 0, 1);
+    const target = V3T(s * 0.3, 1.02 - pull * 0.5, -0.04);
+    if (landed) target.set(s * 0.3, 0.75, -0.25);
+    vehicle.updateMatrixWorld(true);
+    reach(j['sh' + k], j['el' + k], toLocal(j.spine, ud.rig.root.localToWorld(target)), V3T(s, -0.3, 0.3));
+    // steering line follows the hand
+    const hand = vehicle.worldToLocal(j['el' + k].localToWorld(V3T(0, -0.3, 0)));
+    const sc = ud.chute.scale;
+    aimRod(ud.toggleLines[s < 0 ? 0 : 1], V3T(hand.x / sc.x, hand.y / sc.y, hand.z / sc.z), V3T(s * 3.5, 5.4, 1.3));
+  }
 }
 
 // ---------- particles ----------
@@ -1599,6 +1828,7 @@ function tick(dt) {
 }
 
 // ---------- vehicle + camera sync ----------
+let animClock = 0;
 function syncVehicle(dt) {
   if (!vehicle || !sim) return;
   vehicle.position.copy(tv(sim.pos));
@@ -1617,14 +1847,10 @@ function syncVehicle(dt) {
       }
     }
   }
-  if (mode === 'skydive') {
-    const free = sim.phase === 'free';
-    ud.chute.visible = !free;
-    if (!free) { const o = sim.open; ud.chute.scale.set(0.3 + 0.7 * o, 0.2 + 0.8 * o, 0.3 + 0.7 * o); }
-    ud.arms.forEach((a, i) => { a.rotation.z = free ? (i ? 1 : -1) * 1.3 : (i ? 1 : -1) * 2.6; });
-    ud.legs.forEach((l, i) => { l.rotation.z = free ? (i ? 1 : -1) * 0.35 : 0; });
-  }
-  if (mode === 'jetpack') vehicle.userData.arms.forEach((a, i) => { a.rotation.set(0.55, 0, (i ? 1 : -1) * 0.06); });  // hands on the control grips
+  if (state !== 'pause') animClock += dt;
+  if (mode === 'glider') animateGlider(dt, animClock);
+  else if (mode === 'jetpack') animateJetpack(dt, animClock);
+  else if (mode === 'skydive') animateSkydiver(dt, animClock);
   // blob shadow
   const gy = W.surfaceAt(sim.pos.x, sim.pos.z), h = sim.pos.y - gy;
   shadow.position.set(sim.pos.x, gy + 0.2, sim.pos.z);

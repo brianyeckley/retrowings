@@ -26,11 +26,11 @@ const W = S.createWorld();
 check(W.trees.length > 5000, `world builds (${W.trees.length} trees)`);
 
 const neutral = () => ({ lx: 0, ly: 0, rx: 0, ry: 0, l1: 0, r1: 0, r2: 0, cross: false, square: false, crossP: false });
-const run = (key, ctl, T, spawn, thermals = true) => {
+const run = (key, ctl, T, spawn, thermals = true, stop = null) => {
   const c = S.prepareCourse(key, W); W.thermals = thermals ? c.thermals : [];
   const s = new S.SIMS[key](W); s.reset(spawn ? spawn(c) : c.spawn);
   let t = 0;
-  while (t < T && !s.done) { s.update(1 / 120, Object.assign(neutral(), ctl(t, s, c))); t += 1 / 120; }
+  while (t < T && !s.done && !(stop && stop(s))) { s.update(1 / 120, Object.assign(neutral(), ctl(t, s, c))); t += 1 / 120; }
   return { s, c };
 };
 
@@ -45,8 +45,10 @@ for (const key of Object.keys(S.COURSES)) {
   check(s.airborne && !s.done, `plane takes off at full throttle with a gentle pull (alt ${s.agl.toFixed(0)} m)`); }
 { const { s } = run('glider', () => ({}), 20, null, false);
   const sink = -s.vel.y; check(sink > 1 && sink < 2.5 && s.v > 12 && s.v < 16, `glider (still air) trims at ${s.v.toFixed(1)} m/s, sink ${sink.toFixed(2)} m/s`); }
-{ const { s } = run('glider', () => ({ lx: 0.55 }), 60, c => ({ x: c.thermals[0].x - 42, z: c.thermals[0].z, y: c.thermals[0].base + 150, yaw: 0, speed: 14 }));
-  const climb = s.pos.y - S.prepareCourse('glider', W).thermals[0].base - 150; check(climb > 100, `glider climbs ${climb.toFixed(0)} m circling a thermal for 60 s`); }
+{ // circling 60 m off the thermal's center should still climb 300 m quickly (inflow draws you in)
+  const c0 = S.prepareCourse('glider', W), th = c0.thermals[1];
+  let t = 0; const { s } = run('glider', (tt, s) => { t = tt; return { lx: 0.55 }; }, 120, () => ({ x: th.x + 60, z: th.z, y: th.base + 170, yaw: 0, speed: 14 }), true, s => s.pos.y - th.base - 170 >= 300);
+  check(s.pos.y - th.base - 170 >= 300 && t < 45, `glider climbs 300 m in a thermal in ${t.toFixed(0)} s (limit 45 s)`); }
 { const { s } = run('jetpack', (t) => ({ r2: t < 2 ? 0.7 : 0.48 }), 12);
   check(s.agl > 5 && Math.abs(s.vel.y) < 4, `jetpack hovers near half thrust (vs ${s.vel.y.toFixed(1)} m/s)`); }
 { const { s } = run('jetpack', (t) => ({ r2: 1, ly: t > 2 ? -1 : 0 }), 8);

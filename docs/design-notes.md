@@ -10,18 +10,19 @@
 
 ## Controls
 - Biplane: left stick pitch/bank · L1/R1 rudder · ✕/□ throttle up/down (gauge on screen).
-- Hang glider: left stick pitch/bank · ✕ flare. Thermals (rising sparkles) give lift.
+- Hang glider: left stick pitch/bank · ✕ flare. Thermals (rising sparkles) give strong lift and gently draw you toward their core.
 - Jetpack: R2 analog thrust (about half pull hovers) · left stick up/down leans (full forward ≈ 80°, jets pointing back, SNES-style flat-out flight) · left stick left/right turns · fuel gauge.
 - Skydiving: stick half forward = track (fastest forward travel), full forward = dive, back = spread flat (slow), sideways turns · ✕ pulls chute · under canopy forward = faster, back = brake. HUD cross shows where you'll pass the next ring's height (green = inside the ring).
 
 ## Level (one map, all four lessons)
 - Airfield + runway in the middle, river running north–south, lake to the east, mountains north, hills west, farmland and forests.
 - Biplane: 10 rings around the valley; approach from the south over the last ring. Runway is 740 m; touchdown markers sit 330 m in, leaving ~400 m to roll out.
-- Hang glider: 3 thermals, 4 rings up to ~470 m, bullseye landing.
+- Hang glider: 3 thermals (70 m core, 11.5–13 m/s), 4 rings up to ~470 m, bullseye landing, par 3:30.
 - Jetpack: 6 low rings over the lake, bullseye landing.
 - Skydiving: drop at 1300 m, 4 freefall rings ~190 m apart vertically, canopy to bullseye.
 
 ## Change log
+- v5: faster thermals (core lift 11.5–13 m/s across a 70 m core, plus inflow that draws a circling glider to the center; a typical 300 m climb now takes ~30 s instead of 1.5–3+ min), glider par 3:30. New jointed pilot (helmet, goggles, shaped torso, elbows, gloves, knees, boots) shared by the glider, jetpack and skydiving lessons, with two-bone IK for hands on bars, grips and toggles. Animation: glider pilot hangs prone and weight-shifts into turns, swings upright to land and runs it out; jetpack legs dangle, brace for landing and stream back in flat-out flight, head looks into turns; skydiver arches in a box position, sweeps arms back to dive, spreads wide to slow, legs flutter in the wind, hands work the toggles under canopy.
 - v4: sound. All synthesized with Web Audio (no files): three original tracks (title “Heartland Lesson”, flight “Blue Skies Takeoff” for biplane/jetpack, glide “Thermals” for glider/skydiving) with FM e-piano, bass, lead, pad, drums and SNES-style echo; biplane engine that follows throttle, jetpack roar on R2, speed-based wind, glider variometer beeps (faster/higher as you climb), stall horn, low-fuel beeps, chute opening, touchdown chirp, ring chimes, crash/splash, medal jingles, menu blips. Music and effects volume in the pause menu (saved per browser).
 - v3.1: nginx config warning fixed (duplicate gzip MIME type); README explains adding the tunnel's Public Hostname (which also creates the DNS record).
 - v3: controller picker ignores keyboard dongles; repo, Docker image and Cloudflare Tunnel deployment.
