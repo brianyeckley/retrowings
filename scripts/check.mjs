@@ -45,10 +45,19 @@ for (const key of Object.keys(S.COURSES)) {
   check(s.airborne && !s.done, `plane takes off at full throttle with a gentle pull (alt ${s.agl.toFixed(0)} m)`); }
 { const { s } = run('glider', () => ({}), 20, null, false);
   const sink = -s.vel.y; check(sink > 1 && sink < 2.5 && s.v > 12 && s.v < 16, `glider (still air) trims at ${s.v.toFixed(1)} m/s, sink ${sink.toFixed(2)} m/s`); }
-{ // circling 60 m off the thermal's center should still climb 300 m quickly (inflow draws you in)
-  const c0 = S.prepareCourse('glider', W), th = c0.thermals[1];
-  let t = 0; const { s } = run('glider', (tt, s) => { t = tt; return { lx: 0.55 }; }, 120, () => ({ x: th.x + 60, z: th.z, y: th.base + 170, yaw: 0, speed: 14 }), true, s => s.pos.y - th.base - 170 >= 300);
-  check(s.pos.y - th.base - 170 >= 300 && t < 45, `glider climbs 300 m in a thermal in ${t.toFixed(0)} s (limit 45 s)`); }
+{ // circling 60 m off a thermal's center should still climb most of its height quickly (inflow draws you in)
+  const c0 = S.prepareCourse('glider', W);
+  for (const [k, th] of c0.thermals.entries()) {
+    const climb = th.top - 180;
+    let t = 0; const { s } = run('glider', (tt) => { t = tt; return { lx: 0.55 }; }, 120, () => ({ x: th.x + 60, z: th.z, y: th.base + 80, yaw: 0, speed: 14 }), true, s => s.pos.y - th.base - 80 >= climb);
+    check(s.pos.y - th.base - 80 >= climb && t < 40, `thermal ${k + 1}: climbs ${climb} m in ${t.toFixed(0)} s (limit 40 s)`);
+  }
+  // easy-course rule: rings sit in calm air, outside every thermal's lift and inflow
+  for (const [i, r] of c0.rings.entries()) {
+    W.thermals = c0.thermals; const inflow = W.thermalInflow(r.c);
+    check(W.thermalLift(r.c) === 0 && inflow.x === 0 && inflow.z === 0, `glider ring ${i + 1} is in calm air (${Math.min(...c0.thermals.map(t => Math.hypot(t.x - r.c.x, t.z - r.c.z))).toFixed(0)} m from the nearest thermal)`);
+  }
+}
 { const { s } = run('jetpack', (t) => ({ r2: t < 2 ? 0.7 : 0.48 }), 12);
   check(s.agl > 5 && Math.abs(s.vel.y) < 4, `jetpack hovers near half thrust (vs ${s.vel.y.toFixed(1)} m/s)`); }
 { const { s } = run('jetpack', (t) => ({ r2: 1, ly: t > 2 ? -1 : 0 }), 8);

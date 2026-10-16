@@ -247,12 +247,13 @@ const COURSES = {
     landing: { type: 'runway', ax: -150, az: 760, bx: -150, bz: 20, w: 30, markerZ: 430 },
   },
   glider: {
-    name: 'Hang Glider', short: 'HANG GLIDER', par: 210, ringR: 16,
+    name: 'Hang Glider', short: 'HANG GLIDER', par: 225, ringR: 16,
     desc: 'Ride the thermals up to the high rings, then hit the bullseye.',
-    goal: 'Ride rising thermals (look for the sparkles) to climb to the high rings, then glide down and land on the bullseye. Flare with ✕ just before touchdown.',
+    goal: 'Glide through the first ring, then circle in each thermal (look for the rising sparkles) to climb before gliding out to the next ring. The last ring sits on a long final glide to the bullseye: nose down a little if you are high. Flare with ✕ just before touchdown.',
     spawn: { x: -800, z: 950, agl: 170, speed: 14 },
-    rings: [[-830, 700, 140], [-1020, 380, 360], [-950, -120, 470], [-600, -360, 300]],
-    thermals: [{ x: -820, z: 610, r: 70, lift: 12, top: 520 }, { x: -1080, z: 150, r: 70, lift: 13, top: 600 }, { x: -760, z: -330, r: 70, lift: 11.5, top: 500 }],
+    // Easy course: every ring sits in calm air, at least 250 m from any thermal. Climb in a thermal, then glide out to the ring.
+    rings: [[-805, 830, 150], [-1080, 480, 300], [-1000, -140, 320], [-450, 700, 130]],
+    thermals: [{ x: -840, z: 560, r: 70, lift: 12, top: 400 }, { x: -1080, z: 150, r: 70, lift: 13, top: 420 }, { x: -760, z: -330, r: 70, lift: 11.5, top: 420 }],
     landing: { type: 'target', x: -450, z: -150, r: 20 },
   },
   jetpack: {

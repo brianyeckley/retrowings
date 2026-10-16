@@ -18,11 +18,12 @@
 ## Level (one map, all four lessons)
 - Airfield + runway in the middle, river running north–south, lake to the east, mountains north, hills west, farmland and forests.
 - Biplane: 10 rings around the valley; approach from the south over the last ring. Runway is 740 m; touchdown markers sit 330 m in, leaving ~400 m to roll out.
-- Hang glider: 3 thermals (70 m core, 11.5–13 m/s), 4 rings up to ~470 m, bullseye landing, par 3:30.
+- Hang glider (easy course): 3 thermals (70 m core, 11.5–13 m/s); 4 rings in calm air at least 250 m from any thermal (150 / 300 / 320 / 130 m up); ring 4 on the final glide to the bullseye; par 3:45. Design rule for this course: climb in a thermal, then glide out to a ring.
 - Jetpack: 6 low rings over the lake, bullseye landing.
 - Skydiving: drop at 1300 m, 4 freefall rings ~190 m apart vertically, canopy to bullseye.
 
 ## Change log
+- v11: hang glider course re-laid as the easy course: every ring sits in calm air 250–414 m from the nearest thermal (outside lift and inflow), so you climb in a thermal and then glide out to the ring. Ring heights 150 / 300 / 320 / 130 m; ring 4 sits on a long final glide that reaches the bullseye at trim. Thermal tops 400 / 420 / 420 m. Par 3:45. CI checks each thermal's climb rate and that every glider ring is in calm air.
 - v10: replays. Every run is recorded at 30 Hz (vehicle state, stick inputs, ring/landing/crash events) and can be watched from the results screen (△ / R). Playback drives a ghost sim, so models, pilot animation, particles and sound replay as flown. An auto director cuts between chase, flyby, trackside, orbit and sky-cam shots, a ring cam waiting on the far side of upcoming rings, and a landing cam at the touchdown spot for the finish. Letterboxed overlay with a timeline marking rings (white = perfect), landing and crash. Controls: □ cycle camera (Auto/Chase/Flyby/Orbit/Sky), hold R1 3× fast, hold L1 slow-mo, ✕/○ exit.
 - v9: results screen explains the score: each line shows earned/possible with a ✓ or the points missed and why (missed rings, perfect passes, landing distance zones, hard-landing speed, runway softness/centerline, seconds over par), the total shows points left on the table, and medal cutoffs (gold 85%, silver 70%, bronze 55%) appear with how many more points the next medal needs. Rings now show the perfect-pass zone as a small white circle (35% of the radius).
 - v8: Pixels setting in the pause menu (◀ ▶): the 3D view renders at 180 (Chunky), 216, 270 (Classic, the original), 324, 360 (Crisp, new default), 432, 540 (Sharp) or 720 (Smooth) lines and is scaled up with hard pixel edges. Saved per browser. HUD always draws at 540 lines; particle and sparkle sizes scale with the setting.
