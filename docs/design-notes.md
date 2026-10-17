@@ -34,7 +34,17 @@ Each level is a full map with all four lessons, its own look, music and vehicle 
 - Skydiving (par 2:00): drop over the canyon, 4 rings stepping down a diagonal line, canopy onto the bullseye on the mesa top.
 - Skins: teal biplane with wheel spats, terracotta drop plane, purple swept-wing glider, red jetpack suit with gold finned tanks, turquoise skydiver with a purple/yellow/teal canopy.
 
+### Level 3: Sakura Valley (unlock: silver in all Red Rock Canyon lessons)
+- Spring in Japan: a snow-capped volcano (crater, gullied snow streaks) with a lake at its foot, a river south through a patchwork of flooded and planted rice paddies, cedar-and-cherry hills both sides, and a flat-topped temple hill in the west. Plants: cherry, cedar, bamboo groves, cloud-pruned pines. Scenery: a giant torii standing in the lake, a great torii and a tunnel of small gates up the temple path, a five-storey pagoda, main hall, stone lanterns, lakeside and riverside shrines, villages. Cherry petals drift past when you're low. "Sakura Breeze" music (koto arpeggios, breathy flute, Japanese pentatonic colour).
+- A step harder than the canyon: smaller rings (biplane 12, glider 14, jetpack 6, skydive 17), weaker/smaller thermals, tighter pars.
+- Biplane (par 3:55): 11 rings. North over the paddies, through the lake torii, a full circle of the volcano at ~100 m, over the pagoda, back over the village, land heading south.
+- Hang glider (par 4:05): launch off the volcano's south slope; ring over the pagoda needs the first thermal, the high ring over the paddies needs the second; bullseye by the riverside shrine.
+- Jetpack (par 1:45): through the great torii, over the gate tunnel up the hill, a spiral around the pagoda, bullseye in the gravel courtyard.
+- Skydiving (par 1:55): a ~2,500 m jump over the crater, rings stepping down the volcano's slope through the clouds, canopy to the lakeside shrine.
+- Skins: indigo biplane with sakura-pink trim and pink wingtip ribbons, red drop plane, pink/cream/indigo glider with red wingtip ribbons, white jetpack suit with indigo finned tanks, pink skydiver with an indigo/cream/red canopy.
+
 ## Change log
+- v14: third level, Sakura Valley (see Levels), unlocked by silver or better in all four Red Rock Canyon lessons. New plant kinds (cherry, cedar, bamboo, pruned pine), torii / pagoda / hall / lantern props, per-level airfield colors, wingtip ribbon streamers, drifting petals, koto instrument and "Sakura Breeze" song.
 - v13.6: pixel-art medal icons (ribbon + disc with a star, gold / silver / bronze palettes, crisp SVG) on the lesson cards, the lock-progress list and, larger, next to the medal on the results screen.
 - v13.5: mouse sensitivity setting in the pause menu (1–10, saved). Default 4 needs ~1000 px of travel for a full look to the side; v13.4 was ~285 px (about level 7.5), which felt floppy.
 - v13.4: mouse look: click the game to grab the mouse; the view follows it and drifts back behind you after ~1.2 s without movement. Esc (Chrome takes the first press to release the mouse) pauses. Pause menu adds Look left / right and Look up / down invert toggles (apply to stick, arrows and mouse; saved). Settings rows show ◀ ▶; clicking the left half lowers, the right half raises (previously any click raised).

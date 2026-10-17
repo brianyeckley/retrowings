@@ -1,6 +1,6 @@
 # Retrowings
 
-A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog controls, built for a PS5 DualSense on PC. Two levels, each with four lessons: Heartland (American countryside) and Red Rock Canyon (desert canyon, unlocked by earning silver or better in all four Heartland lessons). Each level has its own courses, music and vehicle skins. The Heartland lessons:
+A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog controls, built for a PS5 DualSense on PC. Three levels, each with four lessons: Heartland (American countryside), Red Rock Canyon (desert canyon) and Sakura Valley (spring in Japan: a volcano, temples and torii gates). Earning silver or better in all four lessons of a level unlocks the next. Each level has its own courses, music and vehicle skins. The Heartland lessons:
 
 | Lesson | Goal |
 | --- | --- |

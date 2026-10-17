@@ -387,14 +387,124 @@ const COURSES_CANYON = {
   },
 };
 
+// ---------- Sakura Valley terrain ----------
+// Spring in the hills: a big snow-capped volcano to the north with a lake at its foot, a river running
+// south through rice paddies, forested hills either side, and a temple on a flat-topped hill in the west.
+const VOLCANO = { x: -150, z: -1500, R: 1350, H: 820, crater: 110 };
+const SLAKE = { x: 650, z: -650, r: 260 };
+const TEMPLE = { x: -960, z: 440, r: 80, top: 85 };
+const sakuraRiverX = z => 820 + 140 * Math.sin(z / 420 + 0.5) + 50 * Math.sin(z / 150);
+function volcanoHeight(x, z) {
+  const d = Math.hypot(x - VOLCANO.x, z - VOLCANO.z);
+  if (d >= VOLCANO.R) return 0;
+  const a = Math.atan2(z - VOLCANO.z, x - VOLCANO.x);
+  const gully = 0.05 * Math.sin(a * 11 + 2 * Math.sin(a * 3)) * smoothstep(VOLCANO.R, VOLCANO.R * 0.3, d);   // radial ridges
+  let h = VOLCANO.H * Math.pow(1 - d / VOLCANO.R, 1.7) * (1 + gully);
+  const rim = VOLCANO.H * Math.pow(1 - VOLCANO.crater / VOLCANO.R, 1.7);
+  if (d < VOLCANO.crater + 30) h = lerp(Math.min(h, rim + 4), rim - 55, smoothstep(VOLCANO.crater + 10, VOLCANO.crater - 50, d));
+  return h;
+}
+// Paddy country: the low plain south of the volcano, with ragged edges where it meets the hills.
+const sakuraPaddy = (x, z) => z > -250 + 220 * vnoise(x / 480, 3.3, 83) && x > -700 + 180 * vnoise(z / 420, 1.7, 85) && x < 1500 + 200 * vnoise(z / 460, 5.1, 87) && vnoise(x / 320, z / 320, 77) > -0.45;
+function sakuraHeight(x, z) {
+  let h = 12 + 9 * fbm(x / 700, z / 700, 3, 71) + 3 * fbm(x / 120, z / 120, 2, 73);
+  const w = smoothstep(-700, -1700, x);                        // forested hills to the west
+  if (w > 0) h += w * (60 + 170 * Math.max(0, fbm(x / 450, z / 450, 4, 75) + 0.3));
+  const e = smoothstep(1550, 2350, x);                         // and to the east
+  if (e > 0) h += e * (50 + 150 * Math.max(0, fbm(x / 420, z / 420, 4, 79) + 0.3));
+  h += volcanoHeight(x, z);
+  const dt = Math.hypot(x - TEMPLE.x, z - TEMPLE.z);           // the temple hill: a flat top for the courtyard
+  if (dt < 320) h = lerp(h, TEMPLE.top, smoothstep(320, TEMPLE.r, dt) * (dt < TEMPLE.r ? 1 : 0.999));
+  if (sakuraPaddy(x, z) && h < 40) h = terrace(h, 1.6);       // rice paddies step gently down the plain
+  h = Math.max(h, 4);
+  if (z > -480) {                                             // river from the lake south through the paddies
+    const dr = Math.abs(x - sakuraRiverX(z));
+    if (dr < 200) { h = lerp(h, Math.min(h, 6), smoothstep(200, 60, dr)); h = lerp(h, -4, smoothstep(34, 12, dr)); }
+  }
+  const dl = Math.hypot(x - SLAKE.x, z - SLAKE.z);             // the lake at the volcano's foot
+  if (dl < SLAKE.r + 330) {
+    const th = Math.atan2(z - SLAKE.z, x - SLAKE.x), r = SLAKE.r + 35 * Math.sin(3 * th + 2) + 20 * Math.sin(5 * th + 1);
+    h = lerp(h, Math.min(h, 5), smoothstep(r + 260, r + 20, dl));
+    h = lerp(h, -8, smoothstep(r + 10, r - 70, dl));
+  }
+  const isl = Math.hypot(x - 730, z + 710);                    // a small pine island in the lake
+  if (isl < 60) h = Math.max(h, lerp(-8, 7, smoothstep(60, 25, isl)));
+  return h;
+}
+// Spring planting: cherry trees along the river and paddy edges, cedar forest on the hills, bamboo groves,
+// sculpted pines by the lake; the upper volcano is bare rock and snow.
+function sakuraTree(jx, jz, h, k, roll) {
+  if (h < 2) return null;
+  const dv = Math.hypot(jx - VOLCANO.x, jz - VOLCANO.z);
+  if (dv < VOLCANO.R * 0.55) return null;                      // bare upper slopes
+  const hills = h > 45 && dv > VOLCANO.R * 0.75;
+  const grove = fbm(jx / 380 + 9, jz / 380 - 4, 3, 81);
+  if (Math.hypot(jx - SLAKE.x, jz - SLAKE.z) < SLAKE.r + 90 || Math.hypot(jx - 730, jz + 710) < 40) {
+    return roll < 0.18 ? { kind: 'jpine', h: 6 + k * 3, r: 3 + k } : null;
+  }
+  if (sakuraPaddy(jx, jz) && h < 40) {                         // paddies stay open; cherry rows along the river
+    const dr = Math.abs(jx - sakuraRiverX(jz));
+    if (dr > 40 && dr < 75 && roll < 0.5) return { kind: 'sakura', h: 6 + k * 3, r: 3.6 + k * 1.4 };
+    return roll < 0.006 ? { kind: 'sakura', h: 6 + k * 3, r: 3.6 + k * 1.4 } : null;
+  }
+  if (hills || dv < VOLCANO.R) {
+    const p = (dv < VOLCANO.R ? 0.35 * smoothstep(VOLCANO.R * 0.55, VOLCANO.R * 0.8, dv) : 0.75) * smoothstep(-0.25, 0.15, grove + 0.1);
+    if (roll > p) return null;
+    if ((grove > 0.1 && k > 0.4) || (h < 110 && k > 0.6)) return { kind: 'sakura', h: 6 + k * 3, r: 3.6 + k * 1.4 };
+    return { kind: 'cedar', h: 13 + k * 9, r: 2.6 + k * 1.2 };
+  }
+  if (grove < -0.3 && roll < 0.55) return { kind: 'bamboo', h: 9 + k * 5, r: 2.2 };
+  if (roll < 0.05 + 0.25 * smoothstep(0.1, 0.4, grove)) return k > 0.4 ? { kind: 'sakura', h: 6 + k * 3, r: 3.6 + k * 1.4 } : { kind: 'cedar', h: 11 + k * 7, r: 2.4 + k };
+  return null;
+}
+
+const COURSES_SAKURA = {
+  plane: {
+    name: 'Biplane', short: 'BIPLANE', par: 235, ringR: 12,
+    desc: 'Through the lake torii, around the volcano, over the pagoda.',
+    goal: 'Take off north over the paddies, fly through the great torii standing in the lake, climb and circle all the way around the volcano’s flank, dive over the temple pagoda, then swing back over the village and land heading south near the orange markers.',
+    spawn: { x: 150, z: 1980, ground: true, yaw: 0 },
+    rings: [[150, 1050, 45], [420, 380, 50], [560, -540, 14], [860, -1230, 100], [590, -2240, 100], [-510, -2490, 100], [-1190, -1590, 100], [-700, -250, 50], [-960, 440, 60], [-500, 900, 35], [150, 1150, 25]],
+    landing: { type: 'runway', ax: 150, az: 2000, bx: 150, bz: 1380, w: 30, markerZ: 1560 },
+  },
+  glider: {
+    name: 'Hang Glider', short: 'HANG GLIDER', par: 245, ringR: 14,
+    desc: 'Launch off the volcano, ride the thermals, land at the shrine.',
+    goal: 'Launch from the volcano’s south slope and glide down for ring 1. Smaller, weaker thermals here: circle tight to climb. Pass over the temple pagoda, cross the paddies, and land on the bullseye by the riverside shrine. Flare with {cross} just before touchdown.',
+    spawn: { x: -260, z: -760, agl: 60, speed: 14 },
+    rings: [[-520, -320, 70], [-960, 440, 150], [-260, 820, 175], [380, 1120, 40]],
+    thermals: [{ x: -640, z: 40, r: 55, lift: 11, top: 430 }, { x: -620, z: 760, r: 55, lift: 10.5, top: 380 }],
+    landing: { type: 'target', x: 540, z: 1450, r: 18 },
+  },
+  jetpack: {
+    name: 'Jetpack', short: 'JETPACK', par: 105, ringR: 6,
+    desc: 'Up the torii path, around the pagoda, land in the courtyard.',
+    goal: 'Fly through the great torii at the foot of the temple hill, follow the path of gates up the slope, circle the five-storey pagoda as you climb, then come down gently on the bullseye in the temple courtyard. Smaller rings, so be precise. Watch your fuel.',
+    spawn: { x: -960, z: 860, ground: true },
+    rings: [[-960, 800, 8], [-960, 690, 14], [-960, 580, 16], [-1010, 465, 20], [-1055, 420, 30], [-1010, 375, 40], [-965, 420, 50]],
+    landing: { type: 'target', x: -925, z: 470, r: 9, flat: { r: 12, blend: 4 } },
+  },
+  skydive: {
+    name: 'Skydiving', short: 'SKYDIVING', par: 115, ringR: 17,
+    desc: 'Jump over the crater, track down the volcano, land by the lake.',
+    goal: 'Jump high over the volcano and fall straight through the ring above the crater, then track hard ({trackShort}) down the slope for the rest. Pull the chute with {cross} and glide to the bullseye at the lakeside shrine. Flare by {flareHow} just before touchdown.',
+    spawn: { x: -250, z: -1620, agl: 1890, speed: 35 },
+    rings: [[-150, -1500, 1580], [-50, -1300, 1205], [60, -1080, 925], [170, -860, 600]],
+    vertical: true,
+    landing: { type: 'target', x: 380, z: -300, r: 16 },
+  },
+};
+
 // ---------- levels ----------
 // A level is terrain + vegetation + four courses. createWorld(id) makes it current.
 const LEVELS = {
   heartland: { id: 'heartland', name: 'Heartland', base: heartlandHeight, tree: heartlandTree, courses: COURSES_HEARTLAND },
   canyon: { id: 'canyon', name: 'Red Rock Canyon', base: canyonHeight, tree: canyonTree, courses: COURSES_CANYON,
     unlock: { level: 'heartland', medal: 'silver' } },   // silver or better in every lesson of the previous level
+  sakura: { id: 'sakura', name: 'Sakura Valley', base: sakuraHeight, tree: sakuraTree, courses: COURSES_SAKURA,
+    unlock: { level: 'canyon', medal: 'silver' } },
 };
-const LEVEL_ORDER = ['heartland', 'canyon'];
+const LEVEL_ORDER = ['heartland', 'canyon', 'sakura'];
 let LEVEL = LEVELS.heartland, COURSES = LEVEL.courses;
 const baseHeight = (x, z) => LEVEL.base(x, z);
 
@@ -924,10 +1034,42 @@ function canyonColor(c, x, y, z, slope) {
     if (vnoise(x / 70, z / 70, 11) > 0.45) c.lerp(DESERT.scrub, 0.35);
   }
 }
+const SAK = {
+  mud: col('#5f6a58'), shore: col('#d8cfae'), grassA: col('#7fc852'), grassB: col('#5aa53c'), cedar: col('#2f6b3a'),
+  rockLo: col('#8a7a6e'), rockHi: col('#5e504c'), ash: col('#a39488'), snow: col('#f4f6fa'), cliff: col('#7d7468'),
+  paddies: ['#7fb8b0', '#9ad45e', '#b5e070', '#8fcfc0', '#7cc44a', '#c9b98a'].map(col), blossom: col('#e9a9c2'),
+};
+function sakuraColor(c, x, y, z, slope) {
+  const dv = Math.hypot(x - VOLCANO.x, z - VOLCANO.z);
+  if (y < -0.5) { c.copy(SAK.mud); return; }
+  if (y < 2.2) { c.copy(SAK.shore); return; }
+  if (dv < VOLCANO.R * 0.72) {
+    // the volcano: green foothills, ash and dark lava rock higher up, snow streaking down the gullies
+    const a = Math.atan2(z - VOLCANO.z, x - VOLCANO.x);
+    const snowLine = 470 + 70 * Math.sin(a * 11 + 2 * Math.sin(a * 3)) + 25 * vnoise(x / 60, z / 60, 91);
+    if (y > snowLine) { c.copy(SAK.snow); return; }
+    c.copy(SAK.rockLo).lerp(SAK.rockHi, smoothstep(150, 450, y));
+    if (vnoise(x / 90, z / 90, 93) > 0.3) c.lerp(SAK.ash, 0.4);
+    c.lerp(SAK.grassB, smoothstep(VOLCANO.R * 0.5, VOLCANO.R * 0.72, dv) * 0.85);
+    return;
+  }
+  if (slope > 0.8) { c.copy(SAK.cliff); return; }
+  if (Math.hypot(x - TEMPLE.x, z - TEMPLE.z) < TEMPLE.r - 5) { c.set('#d9d2c0'); return; }   // raked gravel courtyard
+  if (sakuraPaddy(x, z) && y < 40) {   // a patchwork of flooded and freshly planted paddies
+    c.copy(SAK.paddies[Math.floor(hash2(Math.floor(x / 75), Math.floor(z / 50), 97) * SAK.paddies.length)]);
+    return;
+  }
+  c.copy(SAK.grassA).lerp(SAK.grassB, clamp(0.5 + 0.8 * vnoise(x / 260, z / 260, 95), 0, 1));
+  if (y > 45) c.lerp(SAK.cedar, 0.55 * smoothstep(45, 110, y));
+  if (fbm(x / 380 + 9, z / 380 - 4, 3, 81) > 0.15 && y > 30) c.lerp(SAK.blossom, 0.25);   // blossom groves tint the hills
+}
 const LOOKS = {
   heartland: { horizon: '#cfe9f7', skyTop: '#3b86dc', skyMid: '#8cc8f0', hemi: [0xdff0ff, 0x56703a, 1.75], sun: [0xfff0d0, 1.9], fog: [700, 3300], water: '#3a8ad0', terrain: heartlandColor, clouds: 46, cloudTint: '#7f93ab' },
   canyon: { horizon: '#f7dfc4', skyTop: '#2c6cd0', skyMid: '#86bdea', hemi: [0xfff0dc, 0xa0603a, 1.65], sun: [0xfff0d0, 2.05], fog: [900, 3800], water: '#3f9ab8', terrain: canyonColor, clouds: 20, cloudTint: '#a68a7a' },
+  sakura: { horizon: '#f6e4ec', skyTop: '#3f7fd6', skyMid: '#a6cdf0', hemi: [0xfff0f6, 0x5a7a3a, 1.7], sun: [0xfff4e8, 1.95], fog: [1100, 4600], water: '#4a9ac8', terrain: sakuraColor, clouds: 34, cloudTint: '#9a8fa8' },
 };
+// Airfield colors per level: strip, markings, hangar.
+const AIRFIELD = { heartland: ['#4a4d57', '#f4f4ee', '#9aa6b8'], canyon: ['#b8946a', '#efe6d2', '#b5653e'], sakura: ['#575a63', '#f4f4ee', '#a8473a'] };
 
 // ---------- vehicle skins per level (colors, plus a few model options) ----------
 const SKINS = {
@@ -945,9 +1087,17 @@ const SKINS = {
     jetpack: { suit: '#e8463a', helmet: '#262a35', accent: '#ffc93c', tanks: '#e8c860', band: '#262a35', fins: true },
     skydive: { suit: '#2fb5a8', helmet: '#f6f1e4', accent: '#7b3fa0', canopy: ['#7b3fa0', '#ffc93c', '#2fb5a8'] },
   },
+  sakura: {   // indigo, sakura pink and torii red; ribbons stream from the wingtips
+    plane: { body: '#2a3f8f', wing: '#f6efe0', trim: '#f29bb8', accent: '#d8362b', pilot: '#3a3f5a', scarf: '#f29bb8', ribbons: '#f29bb8' },
+    drop: { body: '#d8362b', wing: '#f6efe0', trim: '#2a3f8f', accent: '#2a3f8f', pilot: '#3a3f5a', scarf: '#ffffff' },
+    glider: { sail: ['#f29bb8', '#f6efe0', '#2a3f8f'], suit: '#2a3f8f', harness: '#1f2f6a', helmet: '#f29bb8', accent: '#f6efe0', ribbons: '#d8362b' },
+    jetpack: { suit: '#f6efe0', helmet: '#d8362b', accent: '#2a3f8f', tanks: '#3d5aa8', band: '#d8362b', fins: true },
+    skydive: { suit: '#f29bb8', helmet: '#2a3f8f', accent: '#f6efe0', canopy: ['#2a3f8f', '#f6efe0', '#d8362b'] },
+  },
 };
 
 let levelGroup = new THREE.Group(); scene.add(levelGroup);
+let petalAcc = 0;
 let LOOK = LOOKS.heartland, SKIN = SKINS.heartland, levelId = 'heartland';
 
 function buildTerrain() {
@@ -1003,6 +1153,17 @@ function buildTrees() {
     const ang = t.shade * 6.28, ax = Math.cos(ang) * side, az = Math.sin(ang) * side, y0 = t.h * (side < 0 ? 0.35 : 0.5);
     p.set(t.x + ax * 0.85, t.y + y0, t.z + az * 0.85); s.set(0.32, t.h * 0.38, 0.32); c.copy(cacA).lerp(cacB, 1 - t.shade);
   });
+  // Sakura Valley: cherry trees, tall cedars, bamboo clumps and cloud-pruned pines
+  const [sakA, sakB] = A('#f4a9c6', '#ffd3e4'), [cedA, cedB] = A('#22503a', '#2f6b44'), [bamA, bamB] = A('#7fbf4f', '#a8d870'), [jpA, jpB] = A('#2a5f38', '#3a7a45');
+  make(of('sakura'), ico, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.66, t.z); s.set(t.r, t.h * 0.4, t.r); c.copy(sakA).lerp(sakB, t.shade); if (t.shade > 0.92) c.set('#fff0f5'); });
+  make(of('cedar'), cone, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.12, t.z); s.set(t.r, t.h * 0.92, t.r); c.copy(cedA).lerp(cedB, t.shade); });
+  const bam = of('bamboo');
+  for (const [ox, oz, k] of [[0, 0, 1], [1.1, 0.6, 0.85], [-0.9, 0.8, 0.75], [0.3, -1.1, 0.9]]) make(bam, column, (t, p, s, c) => { p.set(t.x + ox, t.y - 0.3, t.z + oz); s.set(0.16, t.h * k, 0.16); c.copy(bamA).lerp(bamB, t.shade); });
+  make(bam, ico, (t, p, s, c) => { p.set(t.x, t.y + t.h * 0.6, t.z); s.set(2.9, t.h * 0.44, 2.9); c.copy(bamB).lerp(bamA, t.shade * 0.5); });
+  const jp = of('jpine');
+  make(jp, ico, (t, p, s, c) => { p.set(t.x + 0.6, t.y + t.h * 0.55, t.z); s.set(t.r * 1.25, t.h * 0.14, t.r); c.copy(jpA).lerp(jpB, t.shade); });
+  make(jp, ico, (t, p, s, c) => { p.set(t.x - 0.4, t.y + t.h * 0.88, t.z + 0.3); s.set(t.r * 0.85, t.h * 0.13, t.r * 0.75); c.copy(jpB).lerp(jpA, t.shade); });
+  make(W.trees.filter(t => t.kind === 'sakura' || t.kind === 'cedar' || t.kind === 'jpine'), trunk, (t, p, s, c) => { p.set(t.x, t.y - 0.5, t.z); s.set(t.kind === 'cedar' ? 0.8 : 0.6, t.h * (t.kind === 'sakura' ? 0.55 : t.kind === 'jpine' ? 0.85 : 0.3), t.kind === 'cedar' ? 0.8 : 0.6); c.set(t.kind === 'sakura' ? '#5a3a2e' : '#5a4030'); });
   make(W.trees.filter(t => t.kind === 'pine' || t.kind === 'round' || t.kind === 'juniper'), trunk, (t, p, s, c) => { p.set(t.x, t.y - 0.5, t.z); s.set(0.7, t.h * (t.kind === 'juniper' ? 0.45 : 0.4), 0.7); c.set(t.kind === 'juniper' ? '#5a4030' : '#6b4a2b'); });
 }
 
@@ -1013,10 +1174,10 @@ function box(w, h, d, color, x = 0, y = 0, z = 0, parent) {
 
 function buildProps() {
   const scene = levelGroup;   // everything below belongs to the current level
-  const desert = levelId === 'canyon';
+  const desert = levelId === 'canyon', AF = AIRFIELD[levelId] || AIRFIELD.heartland;
   // Barns and silos dotted around the farmland
   let count = 0;
-  if (!desert) for (let x = -2200; x < 2200 && count < 16; x += 130) for (let z = -800; z < 2200 && count < 16; z += 130) {
+  if (levelId === 'heartland') for (let x = -2200; x < 2200 && count < 16; x += 130) for (let z = -800; z < 2200 && count < 16; z += 130) {
     if (!isField(x, z) || hash2(x, z, 404) > 0.06) continue;
     const h = W.groundAt(x, z);
     if (h < 3 || Math.abs(W.groundAt(x + 12, z) - W.groundAt(x - 12, z)) > 2) continue;
@@ -1042,6 +1203,7 @@ function buildProps() {
       g.position.set(x, h, z); g.rotation.y = hash2(i, 3, 17) * 0.4 - 0.2; scene.add(g);
     });
   }
+  if (levelId === 'sakura') buildSakuraProps(scene);
   // Clouds
   const puffGeo = new THREE.IcosahedronGeometry(1, 0);
   const puffs = [];
@@ -1062,12 +1224,12 @@ function buildProps() {
   const L = COURSES.plane.landing;
   const rh = W.groundAt(L.ax, (L.az + L.bz) / 2);
   const len = Math.abs(L.az - L.bz), cz = (L.az + L.bz) / 2;
-  box(L.w, 0.3, len, desert ? '#b8946a' : '#4a4d57', L.ax, rh + 0.05, cz, scene);
-  for (let z = L.bz + 20; z < L.az - 20; z += 30) box(1, 0.32, 12, desert ? '#efe6d2' : '#f4f4ee', L.ax, rh + 0.08, z, scene);
+  box(L.w, 0.3, len, AF[0], L.ax, rh + 0.05, cz, scene);
+  for (let z = Math.min(L.az, L.bz) + 20; z < Math.max(L.az, L.bz) - 20; z += 30) box(1, 0.32, 12, AF[1], L.ax, rh + 0.08, z, scene);
   for (const end of [L.az - 8, L.bz + 8]) for (let i = -5; i <= 5; i++) if (i !== 0) box(1.4, 0.32, 10, '#f4f4ee', L.ax + i * 2.4, rh + 0.08, end, scene);
   for (const sx of [-1, 1]) box(4, 0.4, 14, '#ff8a2a', L.ax + sx * (L.w / 2 - 3), rh + 0.12, L.markerZ, scene);
   const hangar = new THREE.Group();
-  const shell = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 24, 10, 1, false, 0, Math.PI), lambert(desert ? '#b5653e' : '#9aa6b8'));
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(9, 9, 24, 10, 1, false, 0, Math.PI), lambert(AF[2]));
   shell.rotation.z = Math.PI / 2; shell.rotation.y = Math.PI / 2; hangar.add(shell);
   box(17, 9, 0.4, '#3a3f4f', 0, 4.5, -12, hangar);
   hangar.position.set(L.ax - 55, rh, lerp(L.az, L.bz, 0.27)); hangar.rotation.y = -Math.PI / 2; scene.add(hangar);
@@ -1094,6 +1256,91 @@ function buildProps() {
   pad.position.set(js.x, W.groundAt(js.x, js.z) + 0.1, js.z); scene.add(pad);
   const padRing = new THREE.Mesh(new THREE.RingGeometry(4.2, 5.2, 8), lambert('#ffc93c'));
   padRing.rotation.x = -Math.PI / 2; padRing.position.set(js.x, W.groundAt(js.x, js.z) + 0.38, js.z); scene.add(padRing);
+}
+
+// ---------- Sakura Valley scenery: torii, temple, shrines, village ----------
+const VERMILION = '#e0402a', SUMI = '#26262c';
+// A torii gate: two pillars `span` apart, `height` tall, a curved black-capped top beam and a tie beam.
+// Built facing ±Z (walk through along Z) with its base at y = 0.
+function makeTorii(span, height, color = VERMILION) {
+  const g = new THREE.Group(), r = Math.max(0.22, span * 0.035);
+  for (const s of [-1, 1]) {
+    const p = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r, height, 8), lambert(color)); p.position.set(s * span / 2, height / 2, 0); g.add(p);
+    box(r * 2.6, height * 0.04, r * 2.6, SUMI, s * span / 2, height * 0.02, 0, g);                 // black footing
+  }
+  const bw = span * 1.42, bh = Math.max(0.3, height * 0.055), bd = r * 2.6;
+  box(span * 1.18, bh * 0.8, bd * 0.7, color, 0, height * 0.76, 0, g);                              // nuki (tie beam)
+  box(bw, bh, bd, color, 0, height * 0.97, 0, g);                                                   // shimaki
+  box(bw * 1.04, bh * 0.75, bd * 1.15, SUMI, 0, height * 0.97 + bh * 0.85, 0, g);                   // kasagi (black cap)
+  for (const s of [-1, 1]) {                                                                         // upturned ends
+    const tip = box(bw * 0.16, bh * 0.75, bd * 1.15, SUMI, s * bw * 0.55, height * 0.97 + bh * 1.05, 0, g); tip.rotation.z = s * 0.22;
+  }
+  box(r * 1.6, height * 0.2, r * 0.6, color, 0, height * 0.86, 0, g);                               // gakuzuka (center strut)
+  return g;
+}
+// A five-storey pagoda: white walls, red posts, dark tiled roofs that shrink toward the spire.
+function makePagoda(base) {
+  const g = new THREE.Group(); let y = 0;
+  box(base * 1.25, 1.2, base * 1.25, '#9a968c', 0, 0.6, 0, g); y = 1.2;
+  for (let i = 0; i < 5; i++) {
+    const w = base * (1 - i * 0.12), h = 4.2 - i * 0.25;
+    box(w, h, w, '#f2ead8', 0, y + h / 2, 0, g);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.45, h, 0.45, VERMILION, sx * w / 2, y + h / 2, sz * w / 2, g);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 1.05, 1.7, 4), lambert('#3a4050'));
+    roof.rotation.y = Math.PI / 4; roof.position.y = y + h + 0.75; g.add(roof);
+    y += h + 0.9;
+  }
+  const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 7, 6), lambert('#c9a04a')); spire.position.y = y + 3.5; g.add(spire);
+  for (let k = 0; k < 5; k++) { const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.12, 8), lambert('#c9a04a')); ring.position.y = y + 1 + k * 0.9; g.add(ring); }
+  return g;
+}
+// A temple hall or house: walls, posts and a hipped roof with broad eaves.
+function makeHall(w, d, h, roofColor = '#3a4050', wall = '#f2ead8', post = VERMILION) {
+  const g = new THREE.Group();
+  box(w + 1, 0.8, d + 1, '#9a968c', 0, 0.4, 0, g);
+  box(w, h, d, wall, 0, 0.8 + h / 2, 0, g);
+  for (let x = -w / 2; x <= w / 2 + 0.01; x += w / 4) box(0.4, h, 0.4, post, x, 0.8 + h / 2, -d / 2 - 0.05, g);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 4), lambert(roofColor));
+  roof.rotation.y = Math.PI / 4; roof.scale.set((w + 4) * 0.72, h * 0.75, (d + 4) * 0.72); roof.position.y = 0.8 + h + h * 0.36; g.add(roof);
+  box(w * 0.75, 0.5, 0.6, roofColor, 0, 0.8 + h + h * 0.72, 0, g);   // ridge
+  return g;
+}
+function makeLantern() {
+  const g = new THREE.Group();
+  box(1.0, 0.3, 1.0, '#a8a49a', 0, 0.15, 0, g); box(0.4, 1.4, 0.4, '#a8a49a', 0, 1.0, 0, g);
+  box(0.9, 0.7, 0.9, '#b8b4aa', 0, 2.0, 0, g); box(0.5, 0.35, 0.95, '#ffe6a0', 0, 2.0, 0, g);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.9, 0.6, 4), lambert('#a8a49a')); cap.rotation.y = Math.PI / 4; cap.position.y = 2.65; g.add(cap);
+  return g;
+}
+function buildSakuraProps(scene) {
+  const at = (obj, x, z, yaw = 0, y) => { obj.position.set(x, y === undefined ? W.groundAt(x, z) : y, z); obj.rotation.y = yaw; scene.add(obj); return obj; };
+  const faceRing = (key, i) => { const r = prepareCourse(key, W).rings[i]; return { r, yaw: Math.atan2(r.n.x, r.n.z) }; };
+  // the great torii standing in the lake: the biplane flies through it
+  const lake = faceRing('plane', 2), lb = W.groundAt(lake.r.c.x, lake.r.c.z);
+  at(makeTorii(30, lake.r.c.y + 16 - lb), lake.r.c.x, lake.r.c.z, lake.yaw, lb);
+  // temple hill: a great torii at the foot, a tunnel of small gates up the path, pagoda, hall, lanterns
+  const gate = faceRing('jetpack', 0);
+  at(makeTorii(17, gate.r.c.y + 8 - W.groundAt(gate.r.c.x, gate.r.c.z)), gate.r.c.x, gate.r.c.z, gate.yaw);
+  for (let z = 785; z > 600; z -= 9) if (Math.abs(z - 690) > 6) at(makeTorii(4.6, 5.6), -960, z, 0);
+  at(makeTorii(9, 9), -955, 522, 0.15);
+  at(makePagoda(9), -1010, 420, 0.2);
+  at(makeHall(20, 14, 6), -925, 398, 0);
+  at(makeHall(9, 7, 4, '#3a4050'), -880, 430, -Math.PI / 2);
+  for (const [x, z] of [[-938, 455], [-912, 455], [-938, 490], [-912, 490], [-970, 505], [-950, 505]]) at(makeLantern(), x, z);
+  // lakeside shrine by the skydiving target, riverside shrine by the glider target
+  at(makeHall(7, 6, 3.5, '#7a3a2e', '#f2ead8'), 412, -322, -0.6); at(makeTorii(6, 7), 352, -284, -0.6);
+  at(makeHall(7, 6, 3.5, '#7a3a2e', '#f2ead8'), 505, 1478, 0.3); at(makeTorii(6, 7), 545, 1495, 0.3);
+  // villages: white walls and dark tile roofs among the paddies
+  let n = 0;
+  for (const [cx, cz, cnt] of [[-470, 1020, 12], [-240, 1880, 9], [470, 1730, 8], [1150, 420, 7]]) for (let i = 0; i < cnt * 3 && n < 40; i++) {
+    const x = cx + (hash2(i, cx, 501) - 0.5) * 260, z = cz + (hash2(i, cz, 502) - 0.5) * 200, h = W.groundAt(x, z);
+    if (h < 3 || Math.abs(W.groundAt(x + 8, z) - W.groundAt(x - 8, z)) > 1.5) continue;
+    if (ZONES.some(zn => segDist(x, z, zn.ax, zn.az, zn.bx, zn.bz) < zn.r + 20)) continue;
+    if (NO_TREES.some(nt => segDist(x, z, nt.ax, nt.az, nt.bx, nt.bz) < nt.r)) continue;
+    const roof = hash2(i, 7, 503) < 0.25 ? '#7a3a2e' : '#3a4352';
+    at(makeHall(7 + hash2(i, 1, 504) * 4, 6 + hash2(i, 2, 504) * 3, 3.2, roof, '#efe8da', '#6b4a2b'), x, z, Math.round(hash2(i, 3, 504) * 4) * Math.PI / 2 + 0.05);
+    n++;
+  }
 }
 
 // The bullseyes of the other lessons are hidden so each lesson shows only its own target.
@@ -1222,7 +1469,8 @@ function makeBiplane(skin = SKINS.heartland.plane) {
     }
   }
   rod(g, V3T(-0.95, -1.35, -1.6), V3T(0.95, -1.35, -1.6), 0.04, '#3a3f4f');
-  g.userData = { prop, blur, ailerons, elevator, rudder, wheels, scarf, rig, exhausts, st: { ail: 0, elev: 0, rud: 0, wheel: 0, puff: 0 } };
+  const ribbons = skin.ribbons ? [-1, 1].map(s => makeRibbon(g, s * 4.55, -0.52, -0.6, skin.ribbons, 6, 0.42)) : [];
+  g.userData = { prop, blur, ailerons, elevator, rudder, wheels, scarf, rig, exhausts, ribbons, st: { ail: 0, elev: 0, rud: 0, wheel: 0, puff: 0 } };
   return g;
 }
 
@@ -1260,6 +1508,20 @@ function animateBiplane(dt, t, ud, live) {
       emit(w, 1, thr > 0.8 ? '#7d7d7d' : '#a8a8a8', 0.8, 0.7 + thr * 0.5, -0.6, 1, { x: sim.vel.x * 0.75, y: sim.vel.y * 0.75, z: sim.vel.z * 0.75 });
     }
   }
+}
+// A streamer: a chain of thin segments trailing behind (+Z) from a point, fluttering with airspeed.
+function makeRibbon(parent, x, y, z, color, n, len) {
+  const segs = []; let p = joint(parent, x, y, z);
+  for (let i = 0; i < n; i++) { part(p, 0.22 - i * 0.02, 0.02, len, i % 2 ? color : '#f6efe0', 0, 0, len / 2); segs.push(p); p = joint(p, 0, 0, len); }
+  return segs;
+}
+function animateRibbons(ud, t, speed) {
+  if (!ud.ribbons || !ud.ribbons.length) return;
+  const f = clamp(speed / 35, 0, 1.2);
+  ud.ribbons.forEach((segs, k) => segs.forEach((seg, i) => {
+    const flap = Math.sin(t * (8 + speed * 0.35) - i * 1.1 + k * 1.7) * (0.18 + 0.3 * f);
+    seg.rotation.set((i ? 0.06 : 0.5 - 0.45 * f) + flap * 0.35, flap * (i ? 1 : 0.4), 0);
+  }));
 }
 // ---------- pilots: a jointed rig shared by the glider, jetpack and skydiving lessons ----------
 // Joints are Groups; limbs hang down their joint's -Y. Root origin is at the hips, the pilot faces -Z.
@@ -1378,7 +1640,8 @@ function makeGlider(skin = SKINS.heartland.glider) {
   part(rig.j.spine, 0.12, 0.3, 0.06, '#d9a53a', 0, 0.25, 0.2);            // reserve parachute pouch
   g.add(rig.root);
   const strap = rod(g, V3T(0, 0.2, -0.2), V3T(0, -1.1, -0.3), 0.02, '#262a35');
-  g.userData = { rig, strap, top, bl, br, st: { upright: 0, shift: 0, push: 0, run: 0 } };
+  const ribbons = skin.ribbons ? [-1, 1].map(s => makeRibbon(g, s * (5.2 + (skin.swept ? 0.8 : 0)), 0, 1.3, skin.ribbons, 5, 0.38)) : [];
+  g.userData = { rig, strap, top, bl, br, ribbons, st: { upright: 0, shift: 0, push: 0, run: 0 } };
   return g;
 }
 
@@ -1733,6 +1996,12 @@ const Sound = (() => {
       const lp = filt('lowpass', 3200, 3, g); lp.frequency.setValueAtTime(3600, t); lp.frequency.exponentialRampToValueAtTime(700, t + 0.35);
       osc('sawtooth', f, t, end, lp); osc('sawtooth', f * 1.004, t, end, gainNode(0.5, lp));
     },
+    koto(m, t, dur, v, dest) {   // plucked silk string: a sharp attack that bends down into pitch, quick bright decay
+      const f = mtof(m), end = t + 1.4, g = gainNode(0, dest);
+      pluck(g, t, 0.13 * v, 0.003, 0.95);
+      const o = osc('triangle', f, t, end, g); o.frequency.setValueAtTime(f * 1.015, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.07);
+      const bp = filt('bandpass', f * 3, 1.4, g); const o2 = osc('square', f, t, t + 0.3, gainNode(0.3, bp)); o2.frequency.setValueAtTime(f * 1.015, t); o2.frequency.exponentialRampToValueAtTime(f, t + 0.07);
+    },
     kick(t, v, dest) { const g = gainNode(0, dest); pluck(g, t, 0.55 * v, 0.003, 0.24); const o = osc('sine', 130, t, t + 0.3, g); o.frequency.exponentialRampToValueAtTime(42, t + 0.12); },
     snare(t, v, dest) {
       const g = gainNode(0, dest); pluck(g, t, 0.2 * v, 0.002, 0.15); noise(t, t + 0.2, filt('bandpass', 1900, 0.8, g));
@@ -1798,6 +2067,19 @@ const Sound = (() => {
     bassPat: [[0, 'r', 2], [2, '5', 1], [3, 'r', 1], [4, 'o', 2], [6, '5', 1], [7, 'a', 1]],
     arp: true,
     drums: { kick: [0, 4], kickV: 0.8, snare: [2, 6], snareV: 0.45, rim: [3, 7], shaker: [0, 1, 2, 3, 4, 5, 6, 7] },
+  };
+  SONGS.sakura = { // "Sakura Breeze" — D, in a Japanese pentatonic colour: koto arpeggios under a breathy flute
+    bpm: 84, swing: 0.5, lead: 'pan', arpInst: 'koto',
+    A: { chords: ['Dm7', 'Ebmaj7', 'Dm7', 'Ebmaj7', 'Gm7', 'Am7', 'Bbmaj7', 'A7sus'],
+      mel: ['A5:2 Bb5:1 A5:1 G5:2 D5:2', 'Eb5:2 G5:2 Bb5:3 A5:1', 'A5:3 G5:1 Eb5:2 D5:2', 'Bb4:2 D5:2 Eb5:4',
+        'G5:2 A5:2 Bb5:2 D6:2', 'C6:3 Bb5:1 A5:2 G5:2', 'A5:2 G5:2 D5:2 Eb5:2', 'D5:6 r:2'] },
+    B: { chords: ['Gm7', 'Dm7', 'Ebmaj7', 'Dm7', 'Gm7', 'Am7', 'Bbmaj7 Am7', 'Dm7'],
+      mel: ['D6:3 C6:1 Bb5:2 A5:2', 'A5:4 G5:2 A5:2', 'Bb5:2 G5:2 Eb5:2 G5:2', 'A5:6 r:2',
+        'G5:2 Bb5:2 D6:2 Eb6:2', 'D6:3 C6:1 A5:4', 'Bb5:2 A5:2 G5:2 Eb5:2', 'D5:8'] },
+    form: ['A', 'B', 'A'],
+    bassPat: [[0, 'r', 3], [3, '5', 1], [4, 'o', 3], [7, '5', 1]],
+    arp: true, padOn: true,
+    drums: { kick: [0, 6], kickV: 0.75, rim: [4], shaker: [0, 2, 4, 6] },
   };
   const QUAL = { maj7: [0, 4, 7, 11], m7: [0, 3, 7, 10], '7': [0, 4, 7, 10], '7sus': [0, 5, 7, 10], m: [0, 3, 7], '': [0, 4, 7] };
   function parseChord(sym) {
@@ -1968,7 +2250,7 @@ const Sound = (() => {
     lastState = state;
     // music
     let want = 'title';
-    if (state === 'play' || state === 'pause' || state === 'replay') want = levelId === 'canyon' ? 'mesa' : SONG_FOR[mode];
+    if (state === 'play' || state === 'pause' || state === 'replay') want = levelId === 'canyon' ? 'mesa' : levelId === 'sakura' ? 'sakura' : SONG_FOR[mode];
     else if (state === 'results' && clock - resultsAt < 3.5) want = null;
     playSong(want);
     set(musicFilter.frequency, state === 'pause' ? 650 : 18000, 0.15);
@@ -2680,6 +2962,17 @@ function syncVehicle(dt) {
   if (mode === 'glider') animateGlider(dt, animClock);
   else if (mode === 'jetpack') animateJetpack(dt, animClock);
   else if (mode === 'skydive') animateSkydiver(dt, animClock);
+  if (vehicle && vehicle.userData.ribbons) animateRibbons(vehicle.userData, animClock, sim.vel.len());
+  // Sakura Valley: cherry petals drifting on the breeze when you're down among the trees
+  if (levelId === 'sakura' && state === 'play' && sim.agl < 150) {
+    petalAcc += dt * 45 * (1 - sim.agl / 150);
+    while (petalAcc > 1) {
+      petalAcc -= 1;
+      const a = Math.random() * Math.PI * 2, r = 4 + Math.random() * 30;
+      const p = camera.position.clone().add(new THREE.Vector3(Math.cos(a) * r, 4 + Math.random() * 18, Math.sin(a) * r));
+      emit(p, 1, Math.random() < 0.3 ? '#fff0f5' : '#f6a8c8', 0.5, 5, 0.25, 1, { x: 1.6, y: -0.5, z: 0.9 });
+    }
+  }
   // blob shadow
   const gy = W.surfaceAt(sim.pos.x, sim.pos.z), h = sim.pos.y - gy;
   shadow.position.set(sim.pos.x, gy + 0.45, sim.pos.z);   // just above the runway strip and its markings
