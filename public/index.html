@@ -77,7 +77,8 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
 .btn { font-family: var(--font-display); font-size: 14px; letter-spacing: .06em; background: var(--ink); color: var(--cream); border: 3px solid var(--muted); padding: 10px 14px; cursor: pointer; }
 .btn.sel, .btn:focus-visible { border-color: var(--gold); color: var(--gold); outline: 0; }
 
-.menu { display: flex; flex-direction: column; gap: 8px; max-width: 380px; }
+.menu { display: flex; flex-direction: column; gap: 6px; max-width: 380px; }
+.menu .btn { padding: 8px 14px; }
 .btn .arr { color: var(--muted); }
 .btn.sel .arr { color: var(--gold); }
 .btn.adj { display: flex; justify-content: space-between; gap: 10px; }
@@ -143,6 +144,7 @@ h2 { font-family: var(--font-display); font-size: clamp(20px, 3.4vw, 30px); colo
       <button class="btn" data-pause="music" id="p-music">Music 70%</button>
       <button class="btn" data-pause="sfx" id="p-sfx">Sound effects 90%</button>
       <button class="btn" data-pause="pixels" id="p-pixels">Pixels</button>
+      <button class="btn" data-pause="sens" id="p-sens">Mouse sensitivity 4</button>
       <button class="btn" data-pause="invx" id="p-invx">Look left / right: normal</button>
       <button class="btn" data-pause="invy" id="p-invy">Look up / down: normal</button>
       <div class="hint"><span data-btn="lr">◀ ▶</span> or click either side to change a setting</div>
@@ -2101,13 +2103,14 @@ window.addEventListener('pointerdown', () => Sound.unlock());
 window.addEventListener('blur', () => Input.keys.clear());
 
 // ---------- look-around: right stick, arrow keys or the mouse; optional inversion ----------
-const lookInvert = { x: false, y: false };
+const lookInvert = { x: false, y: false, sens: 4 };   // sens: mouse sensitivity 1..10
 try { Object.assign(lookInvert, JSON.parse(localStorage.getItem('retrowings.look') || '{}')); } catch (e) { /* defaults */ }
 function saveLook() { try { localStorage.setItem('retrowings.look', JSON.stringify(lookInvert)); } catch (e) { /* storage unavailable */ } }
 // Mouse look: click the game to grab the pointer. The view follows the mouse and drifts back behind you
 // after a moment without movement, like letting go of the stick. Esc (or leaving the lesson) lets go.
 const mouseLook = { x: 0, y: 0, idle: 9 };
-const SENS = 0.0035;
+// Sensitivity 1..10 → stick units per pixel. 4 (default) is a full look to the side in ~1000 px of mouse travel.
+const mouseSens = () => 0.00035 * Math.pow(1.42, lookInvert.sens - 1);
 window.addEventListener('mousedown', e => {
   if (state === 'play' && e.button === 0 && !document.pointerLockElement && document.body.requestPointerLock) {
     try { const r = document.body.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) { /* not allowed */ }
@@ -2116,8 +2119,8 @@ window.addEventListener('mousedown', e => {
 window.addEventListener('mousemove', e => {
   if (!document.pointerLockElement || state !== 'play') return;
   if ((!e.movementX && !e.movementY) || Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return;   // ignore empty events and the jump some browsers send on lock
-  mouseLook.x = clamp(mouseLook.x + e.movementX * SENS, -1, 1);
-  mouseLook.y = clamp(mouseLook.y + e.movementY * SENS, -1, 1);
+  mouseLook.x = clamp(mouseLook.x + e.movementX * mouseSens(), -1, 1);
+  mouseLook.y = clamp(mouseLook.y + e.movementY * mouseSens(), -1, 1);
   mouseLook.idle = 0; Input.setDevice('kb');
 });
 document.addEventListener('pointerlockchange', () => {
@@ -2895,7 +2898,7 @@ function menuInput() {
   }
 }
 // Settings rows: ◀ / ▶ (or clicking the left / right half) lower / raise; ✕ steps up and wraps around.
-const ADJUSTABLE = ['music', 'sfx', 'pixels', 'invx', 'invy'];
+const ADJUSTABLE = ['music', 'sfx', 'pixels', 'sens', 'invx', 'invy'];
 function adjustSetting(which, dir, wrap = false) {
   if (which === 'music' || which === 'sfx') {
     let v = Sound.vol[which] + dir * 0.1;
@@ -2904,6 +2907,10 @@ function adjustSetting(which, dir, wrap = false) {
   } else if (which === 'pixels') {
     const top = RENDER_H === PIXEL_LEVELS[PIXEL_LEVELS.length - 1][0];
     setPixels(wrap && top ? -99 : dir);
+  } else if (which === 'sens') {
+    let v = lookInvert.sens + dir;
+    if (wrap && v > 10) v = 1;
+    lookInvert.sens = clamp(v, 1, 10); saveLook();
   } else { lookInvert[which === 'invx' ? 'x' : 'y'] = !lookInvert[which === 'invx' ? 'x' : 'y']; saveLook(); }
   Sound.ui('move'); renderVolume();
 }
@@ -2912,6 +2919,7 @@ function renderVolume() {
   row('p-music', `Music ${Math.round(Sound.vol.music * 100)}%`);
   row('p-sfx', `Sound effects ${Math.round(Sound.vol.sfx * 100)}%`);
   row('p-pixels', pixelLabel());
+  row('p-sens', `Mouse sensitivity ${lookInvert.sens}`);
   row('p-invx', `Look left / right: ${lookInvert.x ? 'inverted' : 'normal'}`);
   row('p-invy', `Look up / down: ${lookInvert.y ? 'inverted' : 'normal'}`);
 }
