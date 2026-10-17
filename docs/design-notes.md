@@ -21,7 +21,7 @@ Each level is a full map with all four lessons, its own look, music and vehicle 
 
 ### Level 1: Heartland
 - Airfield + runway in the middle, river running north–south, lake to the east, mountains north, hills west, farmland and forests.
-- Biplane: 10 rings around the valley; approach from the south over the last ring. Runway is 740 m; touchdown markers sit 330 m in, leaving ~400 m to roll out.
+- Biplane: 10 rings around the valley; approach from the south over the last ring. Runway is 740 m; the orange touchdown markers sit 70 m past the threshold you land over (like real touchdown-zone markings), leaving the rest to roll out.
 - Hang glider (easy course): 3 thermals (70 m core, 11.5–13 m/s); 4 rings in calm air at least 250 m from any thermal (150 / 200 / 300 / 60 m up); final leg runs straight home from the west: ring 3 → dive through low ring 4 → bullseye; par 3:20. Design rule for this course: climb in a thermal, then glide out to a ring.
 - Jetpack: 6 low rings over the lake, bullseye landing.
 - Skydiving: drop at 1300 m, 4 freefall rings ~190 m apart vertically, canopy to bullseye.
@@ -44,6 +44,7 @@ Each level is a full map with all four lessons, its own look, music and vehicle 
 - Skins: indigo biplane with sakura-pink trim and pink wingtip ribbons, red drop plane, pink/cream/indigo glider with red wingtip ribbons, white jetpack suit with indigo finned tanks, pink skydiver with an indigo/cream/red canopy.
 
 ## Change log
+- v14.1: rings count in order: only the highlighted ring can be flown through (Sakura biplane ring 11 sits near ring 1 and was counting early). Skydiving still skips rings you've fallen past. Runway touchdown markers moved back to 70 m past the approach threshold on all three levels (Heartland 330 m in → 70 m, Canyon 180 → 70, Sakura 180 → 70); they mark where to touch down, not where to stop.
 - v14: third level, Sakura Valley (see Levels), unlocked by silver or better in all four Red Rock Canyon lessons. New plant kinds (cherry, cedar, bamboo, pruned pine), torii / pagoda / hall / lantern props, per-level airfield colors, wingtip ribbon streamers, drifting petals, koto instrument and "Sakura Breeze" song.
 - v13.6: pixel-art medal icons (ribbon + disc with a star, gold / silver / bronze palettes, crisp SVG) on the lesson cards, the lock-progress list and, larger, next to the medal on the results screen.
 - v13.5: mouse sensitivity setting in the pause menu (1–10, saved). Default 4 needs ~1000 px of travel for a full look to the side; v13.4 was ~285 px (about level 7.5), which felt floppy.

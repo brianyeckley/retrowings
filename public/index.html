@@ -278,7 +278,7 @@ const COURSES_HEARTLAND = {
     goal: 'Take off from the airfield, fly through the rings around the valley, then come back in from the south over the last ring and land as close to the orange touchdown markers as you can. There is plenty of runway past them to roll to a stop.',
     spawn: { x: -150, z: 735, ground: true, yaw: 0 },
     rings: [[-150, 120, 30], [-120, -260, 70], [100, -600, 110], [450, -650, 120], [750, -350, 100], [800, 100, 80], [560, 700, 70], [250, 1350, 70], [-60, 1500, 55], [-150, 1060, 32]],
-    landing: { type: 'runway', ax: -150, az: 760, bx: -150, bz: 20, w: 30, markerZ: 430 },
+    landing: { type: 'runway', ax: -150, az: 760, bx: -150, bz: 20, w: 30, markerZ: 690 },
   },
   glider: {
     name: 'Hang Glider', short: 'HANG GLIDER', par: 200, ringR: 16,
@@ -357,7 +357,7 @@ const COURSES_CANYON = {
     goal: 'Take off north from the desert strip, drop into the canyon and follow it between the walls, then climb out over the mesa, fly over the top of the butte and come back south to land near the orange markers.',
     spawn: { x: 350, z: 1590, ground: true, yaw: 0 },
     rings: [[260, 800, 45], [-60, 300, 40], [-358, -300, 50], [-635, -700, 60], [-680, -1100, 70], [-604, -1400, 165], [250, -720, 50], [620, -260, 40], [350, 450, 50]],
-    landing: { type: 'runway', ax: 350, az: 1620, bx: 350, bz: 1000, w: 30, markerZ: 1180 },
+    landing: { type: 'runway', ax: 350, az: 1620, bx: 350, bz: 1000, w: 30, markerZ: 1070 },
   },
   glider: {
     name: 'Hang Glider', short: 'HANG GLIDER', par: 290, ringR: 16,
@@ -465,7 +465,7 @@ const COURSES_SAKURA = {
     goal: 'Take off north over the paddies, fly through the great torii standing in the lake, climb and circle all the way around the volcano’s flank, dive over the temple pagoda, then swing back over the village and land heading south near the orange markers.',
     spawn: { x: 150, z: 1980, ground: true, yaw: 0 },
     rings: [[150, 1050, 45], [420, 380, 50], [560, -540, 14], [860, -1230, 100], [590, -2240, 100], [-510, -2490, 100], [-1190, -1590, 100], [-700, -250, 50], [-960, 440, 60], [-500, 900, 35], [150, 1150, 25]],
-    landing: { type: 'runway', ax: 150, az: 2000, bx: 150, bz: 1380, w: 30, markerZ: 1560 },
+    landing: { type: 'runway', ax: 150, az: 2000, bx: 150, bz: 1380, w: 30, markerZ: 1450 },
   },
   glider: {
     name: 'Hang Glider', short: 'HANG GLIDER', par: 245, ringR: 14,
@@ -2707,8 +2707,10 @@ function tick(dt) {
   recFrame(dt);
   if (!sim.done) {
     run.time += dt;
+    // Rings count in order: only the highlighted (next) ring can be flown through.
+    const next = course.rings.find(r => !r.done && !ringMissed(r));
     course.rings.forEach((r, i) => {
-      if (r.done) return;
+      if (r !== next) return;
       const hit = ringCross(prev, sim.pos, r);
       if (hit) {
         r.done = true; r.perfect = hit.perfect; run.rings++; if (hit.perfect) run.perfect++;
