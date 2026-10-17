@@ -1,6 +1,6 @@
 # Retrowings
 
-A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog controls, built for a PS5 DualSense on PC. Three levels, each with four lessons: Heartland (American countryside), Red Rock Canyon (desert canyon) and Sakura Valley (spring in Japan: a volcano, temples and torii gates). Earning silver or better in all four lessons of a level unlocks the next. Each level has its own courses, music and vehicle skins. The Heartland lessons:
+A Pilotwings-inspired flight game with colorful low-poly 3D graphics and full analog controls, built for a PS5 DualSense on PC. Three levels, each with four lessons: Heartland (American countryside), Red Rock Canyon (desert canyon) and Sakura Valley (spring in Japan: a volcano, temples and torii gates). Earning silver or better in all four lessons of a level unlocks the next. Each level has its own courses, music and vehicle skins. The Heartland lessons:
 
 | Lesson | Goal |
 | --- | --- |
@@ -11,7 +11,7 @@ A Pilotwings-inspired flight game with chunky pixel-3D graphics and full analog 
 
 Scoring: 10 per ring, +5 for a perfect center pass, up to 50 for the landing, up to 20 time bonus. Gold, silver and bronze medals. Best scores are saved in each player's browser. On the lesson screen, L1 / R1 (Q / E) switch levels; add `#unlockall` to the URL to try every level without earning it. After each run, △ (or R) plays a replay with automatic TV-style camera cuts.
 
-All sound and music is synthesized in the browser, so there are no audio files. Music and effects volume and the Pixels setting (how chunky the 3D view looks) live in the pause menu.
+All sound and music is synthesized in the browser, so there are no audio files. Music and effects volume, mouse sensitivity, look inversion and the Detail setting (High: sun shadows and full scenery; Low: lighter scenery for laptops) live in the pause menu.
 
 Play in Chrome or Edge. Plug the controller in and press any button once the page loads. Keyboard works too: once you press a key, every prompt switches to keyboard keys (labelled for your own layout in Chrome and Edge, so Dvorak and AZERTY players see the right keys).
 
